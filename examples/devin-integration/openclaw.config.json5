@@ -1,0 +1,100 @@
+// =====================================================================
+// 元宝 ⇄ Devin CLI 集成 —— 完整可粘贴 OpenClaw 配置示例
+// 文档：docs/devin-integration.md
+//
+// 用法：
+//   1. 拷贝到 ~/.openclaw/config.json5（或与现有配置合并）
+//   2. 填写 channels.yuanbao.appKey / appSecret
+//   3. 确保已执行：
+//        openclaw plugins install @openclaw/acpx
+//        openclaw config set plugins.entries.acpx.enabled true
+//        devin auth status     # 应显示已登录
+//   4. openclaw gateway restart && openclaw acp doctor
+// =====================================================================
+{
+  acp: {
+    enabled: true,
+    dispatch: { enabled: true },
+    backend: "acpx",
+    defaultAgent: "devin",
+    allowedAgents: ["devin"],
+    maxConcurrentSessions: 4,
+    stream: {
+      // 与 channels.yuanbao.idleMs 协调：ACP 端聚合更短，元宝侧聚合更长，避免重复合并
+      coalesceIdleMs: 300,
+      maxChunkChars: 1200,
+    },
+    runtime: {
+      ttlMinutes: 120,
+    },
+  },
+
+  plugins: {
+    entries: {
+      acpx: {
+        enabled: true,
+        config: {
+          // ACP 在元宝里是非交互式的——必须 approve-all，否则任何写文件/执行 shell 都会
+          // 因为找不到 TTY 而以 AcpRuntimeError 终止。
+          permissionMode: "approve-all",
+          // 实在拒绝时优雅降级而不是崩溃
+          nonInteractivePermissions: "deny",
+          // /acp doctor 用 devin 做健康探测
+          probeAgent: "devin",
+          // ★ 关键：把 devin 注册为 acpx agent alias
+          agents: {
+            devin: {
+              command: "devin",
+              args: ["acp"],
+            },
+          },
+          // 给 ACP harness 暴露已装 OpenClaw 插件工具（按需开启）
+          // pluginToolsMcpBridge: true,
+          // openClawToolsMcpBridge: true,
+        },
+      },
+    },
+  },
+
+  agents: {
+    defaults: {
+      workspace: "~/.openclaw/workspace-devin",
+    },
+    list: [
+      {
+        id: "main",
+        default: true,
+        workspace: "~/.openclaw/workspace-devin",
+        runtime: {
+          type: "acp",
+          acp: {
+            agent: "devin",
+            backend: "acpx",
+            mode: "persistent", // 长驻 devin acp 进程，复用会话
+            cwd: "~/.openclaw/workspace-devin",
+          },
+        },
+      },
+    ],
+  },
+
+  // —— 多 agent / 多 peer 路由示例（按需启用）——
+  // bindings: [
+  //   { agentId: "main", match: { channel: "yuanbao" } },
+  // ],
+
+  channels: {
+    yuanbao: {
+      // appKey: "<YOUR_YUANBAO_APP_KEY>",
+      // appSecret: "<YOUR_YUANBAO_APP_SECRET>",
+      dm: { policy: "open" },
+      requireMention: true,
+
+      // 出站合并：与 acp.stream.coalesceIdleMs 协调
+      outboundQueueStrategy: "merge-text",
+      minChars: 2800,
+      maxChars: 3000,
+      idleMs: 5000,
+    },
+  },
+}

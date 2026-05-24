@@ -14,6 +14,8 @@ through direct messages and group chats.
 
 **Status:** production-ready for bot DMs + group chats. WebSocket is the only supported connection mode.
 
+> **Devin CLI 集成**：本插件可与 [Devin CLI](https://cli.devin.ai/docs) 配合使用，让用户在元宝里直接对话 Devin。零代码改动，纯 OpenClaw `acpx` 配置即可。详见 [`docs/devin-integration.md`](docs/devin-integration.md)。
+
 ---
 
 ## Quick start
