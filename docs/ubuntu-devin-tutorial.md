@@ -74,7 +74,7 @@ npm install -g openclaw@latest
 
 ```bash
 openclaw --version
-# 应显示版本号，例如：openclaw/2026.5.6
+# 应显示版本号，例如：openclaw/2026.6.1
 ```
 
 **注意**：如果提示 Node.js 版本不满足要求，请切换到新安装的版本：
@@ -121,13 +121,34 @@ devin --version
 
 ### 3.3 登录 Devin
 
-```bash
-# 登录 Devin 账号
-devin auth login
+**有桌面 / 可交互终端（推荐）**：
 
-# 验证登录状态
-devin auth status
-# 应显示 "logged in" 或类似信息
+```bash
+devin auth login
+devin auth status   # 应显示 "Logged in (via Devin)"
+```
+
+**无桌面 / SSH 远程 / 纯服务端（仅 Devin CLI，无 Devin Desktop）**：
+
+```bash
+# --force-manual-token-flow：跳过浏览器，改为手动粘贴 token
+devin auth login --force-manual-token-flow
+```
+
+执行后会打印一个 URL，在**另一台设备的浏览器**（手机/电脑）打开 → 完成登录 → 复制显示的 token → 粘贴回终端。完成后凭据写入 `~/.local/share/devin/credentials.toml`，后续桥接器自动读取，无需任何额外配置。
+
+**CI / 自动化（无任何交互）**：
+
+```bash
+# 方式：从已登录机器导出 key，注入到网关服务环境
+DEVIN_KEY=$(sed -n 's/windsurf_api_key *= *"\(.*\)"/\1/p' \
+  ~/.local/share/devin/credentials.toml)
+mkdir -p ~/.config/systemd/user/openclaw-gateway.service.d/
+cat > ~/.config/systemd/user/openclaw-gateway.service.d/devin-api-key.conf << EOF
+[Service]
+Environment=DEVIN_ACP_API_KEY=${DEVIN_KEY}
+EOF
+systemctl --user daemon-reload
 ```
 
 ### 3.4 验证 ACP 支持
@@ -210,9 +231,23 @@ openclaw gateway restart
 2. 进入应用设置
 3. 创建机器人，获取 `appKey` 和 `appSecret`
 
-### 5.3 配置 ACP 和 acpx
+### 5.3 安装认证桥接器
+
+> **重要**：Devin CLI 2026.5.x ACP 模式故意不使用本地 `devin auth login` 凭据，必须通过
+> 认证桥接脚本 `devin-acp-auth-bridge.mjs` 中转认证，否则元宝里会报
+> `Permission denied: an internal error occurred`。
 
 ```bash
+# 确认桥接脚本存在（本仓库自带）
+REPO_DIR="$(pwd)"   # 或替换为仓库实际路径
+ls "$REPO_DIR/scripts/devin-acp-auth-bridge.mjs"
+```
+
+### 5.4 配置 ACP 和 acpx（使用桥接器）
+
+```bash
+BRIDGE="$REPO_DIR/scripts/devin-acp-auth-bridge.mjs"
+
 # 配置 ACP 调度
 openclaw config set acp.enabled true
 openclaw config set acp.dispatch.enabled true
@@ -222,12 +257,12 @@ openclaw config set acp.allowedAgents '["devin"]'
 openclaw config set acp.maxConcurrentSessions 4
 openclaw config set acp.runtime.ttlMinutes 120
 
-# 配置 acpx 插件
+# 配置 acpx 插件（关键：command 指向桥接器，不要直接用 "devin"）
 openclaw config set plugins.entries.acpx.config.permissionMode "approve-all"
 openclaw config set plugins.entries.acpx.config.nonInteractivePermissions "deny"
 openclaw config set plugins.entries.acpx.config.probeAgent "devin"
-openclaw config set plugins.entries.acpx.config.agents.devin.command "devin"
-openclaw config set plugins.entries.acpx.config.agents.devin.args '["acp"]'
+openclaw config set plugins.entries.acpx.config.agents.devin.command "node"
+openclaw config set plugins.entries.acpx.config.agents.devin.args "[\"$BRIDGE\"]"
 
 # 配置默认 agent
 openclaw config set agents.defaults.workspace "~/.openclaw/workspace-devin"
@@ -255,7 +290,7 @@ openclaw config patch --stdin << 'EOF'
 EOF
 ```
 
-### 5.4 配置元宝通道
+### 5.5 配置元宝通道
 
 ```bash
 # 设置元宝凭证
@@ -279,13 +314,13 @@ EOF
 
 **重要**：请务必替换 `YOUR_YUANBAO_APP_KEY` 和 `YOUR_YUANBAO_APP_SECRET` 为你自己的凭证。
 
-### 5.5 创建工作目录
+### 5.6 创建工作目录
 
 ```bash
 mkdir -p ~/.openclaw/workspace-devin
 ```
 
-### 5.6 配置通道绑定
+### 5.7 配置通道绑定
 
 ```bash
 # 将元宝通道绑定到 main agent（使用 ACP/Devin）
@@ -298,7 +333,7 @@ openclaw config patch --stdin << 'EOF'
 EOF
 ```
 
-### 5.7 重启 Gateway 应用配置
+### 5.8 重启 Gateway 应用配置
 
 ```bash
 openclaw gateway restart
@@ -486,28 +521,51 @@ channels: {
 openclaw gateway restart
 ```
 
-### 8.5 鉴权失败
+### 8.5 元宝报错 `Permission denied: an internal error occurred (trace ID: ...)`
 
-**原因**：Devin CLI 未登录或网关服务未继承用户环境
+**根本原因**：Devin CLI 2026.5.x ACP 模式故意不使用本地 `devin auth login` 的凭据，要求 ACP host 通过 `_meta.api_key` 显式认证。未经认证的会话在收到 prompt 时会从 Devin 服务器返回此错误。
 
-**解决**：
+**诊断**：
 ```bash
-# 检查 Devin 登录状态
-devin auth status
+# 查看网关日志，确认走的认证路径
+tail -50 /tmp/openclaw/openclaw-$(date +%Y-%m-%d).log \
+  | grep -E "API key provided|PKCE|bridge authenticate|Permission denied"
+```
 
-# 如果未登录，重新登录
-devin auth login
+- `API key provided directly via authenticate meta` → 桥接器工作正常，问题在别处
+- `PKCE authentication flow` → 桥接器未被使用，`command` 配置不对
+- `bridge authenticate failed` 后跟 `timed out` → 网络到 Devin 服务器延迟过高（桥接器会自动重试）
 
-# 如果网关以 systemd 服务运行，可能需要显式设置 HOME 环境变量
-# 编辑 systemd 服务文件（如果使用 systemd）
-sudo systemctl edit openclaw-gateway
+**解决步骤**：
 
-# 添加环境变量
-[Service]
-Environment="HOME=/home/yourusername"
+```bash
+# 1. 确认认证桥接器配置正确
+python3 -c "
+import json
+c = json.load(open('/home/$USER/.openclaw/openclaw.json'))
+a = c['plugins']['entries']['acpx']['config']['agents']['devin']
+print('command:', a['command'])
+print('args:', a['args'])
+"
+# 期望输出：command: node  args: [...bridge.mjs...]
 
-# 重启服务
-sudo systemctl restart openclaw-gateway
+# 2. 若未配置桥接器，重新配置
+BRIDGE="/path/to/yuanbao-openclaw-plugin/scripts/devin-acp-auth-bridge.mjs"
+openclaw config set plugins.entries.acpx.config.agents.devin.command "node"
+openclaw config set plugins.entries.acpx.config.agents.devin.args "[\"$BRIDGE\"]"
+openclaw gateway restart
+
+# 3. 确认 Devin 凭据可用（桥接器从这里读取 API key）
+devin auth status   # 应显示 "Logged in"
+
+# 无桌面环境（SSH/headless）时重新登录：
+# devin auth login --force-manual-token-flow
+
+# 4. 手动测试桥接器
+DEVIN_ACP_BRIDGE_DEBUG=1 node "$BRIDGE" <<'EOF'
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{"fs":{"readTextFile":true},"terminal":true}}}
+EOF
+# 应看到：ACP: API key provided directly via authenticate meta
 ```
 
 ### 8.6 网关无法启动
