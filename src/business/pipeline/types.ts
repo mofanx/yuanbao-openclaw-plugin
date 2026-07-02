@@ -10,7 +10,6 @@ import type { YuanbaoWsClient } from "../../access/ws/client.js";
 import type { ModuleLog } from "../../logger.js";
 import type { QuoteInfo, YuanbaoInboundMessage, ResolvedYuanbaoAccount } from "../../types.js";
 import type { MediaItem, MentionItem } from "../messaging/handlers/types.js";
-import type { QueueSession } from "../outbound/queue.js";
 import type { MessageSender } from "../outbound/types.js";
 import type { YuanbaoTraceContext } from "../trace/context.js";
 // import type { OutboundReplyPayload } from 'openclaw/plugin-sdk/reply-payload';
@@ -65,6 +64,8 @@ export interface PipelineContext {
   commandAuthorized: boolean;
   rewrittenBody: string;
   hasControlCommand: boolean;
+  /** Parsed command parts: [command, ...args], e.g. ["/new"] or ["/reset", "arg1"]. Empty when not a command. */
+  commandParts: string[];
 
   // -- Populated by resolveMention --
   effectiveWasMentioned: boolean;
@@ -91,7 +92,6 @@ export interface PipelineContext {
 
   // -- Populated by prepareSender --
   sender?: MessageSender;
-  queueSession?: QueueSession;
 
   /** e.g. 'sticker', 'sticker-search', 'react'; undefined for non-action requests */
   action?: string;

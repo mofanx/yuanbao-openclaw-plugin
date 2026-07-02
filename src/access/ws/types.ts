@@ -102,6 +102,9 @@ export const WS_HEARTBEAT = {
 /** Reply-status heartbeat enum type */
 export type WsHeartbeatValue = (typeof WS_HEARTBEAT)[keyof typeof WS_HEARTBEAT];
 
+/** Reply heartbeat API: group dissolved — stop further heartbeat calls */
+export const WS_HEARTBEAT_GROUP_DISSOLVED_CODE = 1652513;
+
 /** Server response for a business request */
 export type WsSendMessageResponse = {
   msgId: string;
@@ -199,4 +202,18 @@ export type WsSyncInformationResponse = {
   msgId: string;
   code: number;
   msg: string;
+};
+
+/** Query bot info request */
+export type WsQueryBotInfoData = {
+  bot_id: string;
+};
+
+/** Query bot info response */
+export type WsQueryBotInfoResponse = {
+  msgId: string;
+  code: number;
+  msg: string;
+  botId: string;
+  ownerId: string;
 };

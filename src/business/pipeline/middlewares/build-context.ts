@@ -22,6 +22,7 @@ export const buildContext: MiddlewareDescriptor = {
       senderNickname,
       groupCode,
       rewrittenBody,
+      commandParts,
       mediaPaths,
       mediaTypes,
       commandAuthorized,
@@ -38,11 +39,12 @@ export const buildContext: MiddlewareDescriptor = {
     }
     const label = isGroup ? `group:${groupCode}` : `direct:${fromAccount}`;
 
-    // Format envelope
+    // Format envelope — always include timestamp (prefer protocol-level msg_time for accuracy)
+    const msgTimestamp = raw.msg_time ? new Date(raw.msg_time * 1000) : new Date();
     const body = core.channel.reply.formatAgentEnvelope({
       channel: "YUANBAO",
       from: label,
-      ...(isGroup ? { timestamp: new Date() } : {}),
+      timestamp: msgTimestamp,
       previousTimestamp,
       envelope: envelopeOptions,
       body: rewrittenBody,
@@ -86,7 +88,7 @@ export const buildContext: MiddlewareDescriptor = {
       BodyForAgent: rewrittenBody,
       ...(isGroup ? { InboundHistory: inboundHistory } : {}),
       RawBody: rewrittenBody,
-      CommandBody: rewrittenBody,
+      CommandBody: commandParts?.length > 0 ? commandParts.join(" ") : rewrittenBody,
       From: `yuanbao:${label}`,
       To: `yuanbao:${label}`,
       SessionKey: route.sessionKey,
@@ -106,6 +108,7 @@ export const buildContext: MiddlewareDescriptor = {
       OriginatingTo: `yuanbao:${label}`,
       CommandAuthorized: commandAuthorized,
       ...(account.markdownHintEnabled && { GroupSystemPrompt: YUANBAO_MARKDOWN_HINT }),
+      UntrustedContext: [`[Current Time] ${new Date().toString()}`],
       ...(mediaPaths.length > 0 && { MediaPaths: mediaPaths, MediaPath: mediaPaths[0] }),
       ...(mediaTypes.length > 0 && { MediaTypes: mediaTypes, MediaType: mediaTypes[0] }),
       ...(ctx.linkUrls.length > 0 && { LinkUnderstanding: [...new Set(ctx.linkUrls)] }),

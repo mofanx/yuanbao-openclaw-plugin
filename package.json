@@ -1,6 +1,6 @@
 {
   "name": "openclaw-plugin-yuanbao",
-  "version": "2.13.5",
+  "version": "2.17.0",
   "type": "module",
   "private": false,
   "packageManager": "pnpm@11.3.0",
@@ -24,8 +24,13 @@
     "build": "tsc",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "test": "node --experimental-test-module-mocks --import tsx --test src/**/*.test.ts",
-    "release": "bash scripts/release.sh"
+    "test": "node --experimental-test-module-mocks --import tsx --test \"src/**/*.test.ts\"",
+    "test:coverage": "c8 node --experimental-test-module-mocks --import tsx --test \"src/**/*.test.ts\"",
+    "coverage:diff": "node scripts/diff-coverage.mjs --base origin/main --min 80",
+    "coverage:diff:staged": "node scripts/diff-coverage.mjs --staged --min 80",
+    "hooks:install": "node scripts/install-hooks.mjs",
+    "release": "bash scripts/release.sh",
+    "prepare": "node scripts/install-hooks.mjs"
   },
   "dependencies": {
     "protobufjs": "^7.5.4",
@@ -36,8 +41,9 @@
     "@types/node": "^24.12.2",
     "@types/semver": "^7.7.1",
     "@types/ws": "^8.18.1",
+    "c8": "^11.0.0",
     "eslint": "^9.0.0",
-    "openclaw": ">=2026.4.5",
+    "openclaw": ">=2026.5.7",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.0.0"
@@ -71,7 +77,7 @@
       "npmSpec": "openclaw-plugin-yuanbao",
       "localPath": "extensions/yuanbao",
       "defaultChoice": "npm",
-      "minHostVersion": ">=2026.4.5"
+      "minHostVersion": ">=2026.5.7"
     }
   }
 }

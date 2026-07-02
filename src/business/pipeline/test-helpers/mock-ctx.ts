@@ -69,6 +69,7 @@ export function createMockCtx(overrides: DeepPartial<PipelineContext> = {}): Pip
     commandAuthorized: false,
     rewrittenBody: "",
     hasControlCommand: false,
+    commandParts: [],
     mediaPaths: [],
     mediaTypes: [],
     quoteInfo: undefined,
@@ -78,7 +79,6 @@ export function createMockCtx(overrides: DeepPartial<PipelineContext> = {}): Pip
     previousTimestamp: undefined,
     ctxPayload: undefined,
     sender: undefined,
-    queueSession: undefined,
     action: undefined,
   };
 
