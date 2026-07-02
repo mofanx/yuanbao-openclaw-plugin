@@ -17,7 +17,7 @@
 //   acpx 不会发送这个字段，所以需要 bridge 做中转认证。
 //   bridge 会从 ~/.local/share/devin/credentials.toml 自动读取 windsurf_api_key。
 //
-// 兼容性：已在 devin 2026.5.26-5、openclaw 2026.6.1、Ubuntu 22.04/24.04 测试
+// 兼容性：已在 devin 2026.8.18、openclaw 2026.6.11、插件 2.17.0、Ubuntu 22.04/24.04 测试
 // =====================================================================
 {
   acp: {

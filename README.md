@@ -21,6 +21,8 @@ through direct messages and group chats.
 ## Quick start
 
 > **Requires OpenClaw 2026.5.7 or above.** Run `openclaw --version` to check. Upgrade with `openclaw update`.
+>
+> **当前版本**: v2.17.0 - 包含时间上下文感知、输出处理重构等重要改进。
 
 ### 1. Add the Yuanbao channel with your credentials
 

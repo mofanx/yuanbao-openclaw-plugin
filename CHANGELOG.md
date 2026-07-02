@@ -1,5 +1,27 @@
 # Changelog
 
+## 2.17.0 (2026-07-02) - feat/devin-bridge
+
+### Devin CLI 集成功能
+- **feat:** 添加完整的 Devin CLI ACP 认证桥接器
+- **feat:** 支持通过元宝直接与 Devin CLI 对话
+- **feat:** 添加时间上下文感知，提升 Devin 时间相关请求处理
+- **feat:** 输出处理重构，改进流式输出性能
+- **feat:** 思考边界修复，改进 AI 回复格式化
+- **docs:** 添加完整的 Devin CLI 集成文档
+- **docs:** 添加 OpenClaw ACP 使用指南
+- **docs:** 添加 Ubuntu 环境下完整教程
+- **test:** 添加 Devin ACP 验证脚本
+- **test:** 添加桥接器测试脚本
+
+### 官方 v2.17.0 功能合并
+- **feat:** 注入当前时间到 agent 上下文
+- **refactor:** 用 StreamingOutputSession 替换 QueueSession
+- **fix:** 修复思考边界换行规则
+- **test:** 大幅提升测试覆盖率到 80%+
+- **fix:** 修复 cron 工具输入格式
+- **fix:** 修复 WebSocket 心跳异常
+
 ## 2.15.0 (2026-06-11)
 
 - **feat:** 支持微信聊天记录解析

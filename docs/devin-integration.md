@@ -4,7 +4,7 @@
 
 集成复用 OpenClaw 内置的 ACP harness 路由能力，把 Devin CLI 注册为 acpx agent alias，通过一个轻量的认证桥接脚本解决 Devin ACP 模式的认证问题。
 
-> **已在以下版本验证**：`devin 2026.5.26-5`、`openclaw 2026.6.1`、Ubuntu 22.04/24.04 headless 无桌面环境。
+> **已在以下版本验证**：`devin 2026.8.18`、`openclaw 2026.6.11`、插件 `2.17.0`、Ubuntu 22.04/24.04 headless 无桌面环境。
 
 ---
 
@@ -44,7 +44,7 @@ Devin CLI 2026.5.x ACP 模式启用了严格的凭据策略——**故意不使�
 | acpx 插件    | OpenClaw 内置     | `openclaw plugins list` 看到 `acpx`  |
 | Devin CLI    | `2026.5.26-5+`   | `devin --version`                     |
 | Node.js      | `22.x+`           | `node --version`                      |
-| 本插件       | `2.13.5+`         | `openclaw channels list`              |
+| 本插件       | `2.17.0+`         | `openclaw plugins list`              |
 
 **无需 Devin Desktop**：Devin CLI 可作为独立工具安装，无需安装 Devin Desktop（原 Windsurf IDE）。
 
@@ -113,6 +113,18 @@ BRIDGE_DIR="$(pwd)/yuanbao-openclaw-plugin"
 
 # 确认脚本存在
 ls "$BRIDGE_DIR/scripts/devin-acp-auth-bridge.mjs"
+```
+
+**注意**：如果从源码安装插件，需要先构建：
+
+```bash
+cd "$BRIDGE_DIR"
+# 安装依赖（需要 pnpm）
+pnpm install
+# 构建插件
+npx tsc
+# 安装到 OpenClaw
+openclaw plugins install .
 ```
 
 ### 4.2 更新 OpenClaw 配置
@@ -219,6 +231,31 @@ openclaw gateway restart
 # 观察网关日志确认正常启动
 tail -f /tmp/openclaw/openclaw-$(date +%Y-%m-%d).log | grep -E "acpx|bridge|devin|error"
 ```
+
+### 4.5 插件更新
+
+如果插件已安装，需要更新到最新版本以获得最新功能：
+
+```bash
+# 卸载旧版本
+openclaw plugins uninstall openclaw-plugin-yuanbao --force
+
+# 重新安装最新版本
+cd /path/to/yuanbao-openclaw-plugin
+openclaw plugins install .
+
+# 重启网关
+openclaw gateway restart
+```
+
+### 4.6 新版本特性（v2.17.0）
+
+插件 v2.17.0 包含以下对 Devin CLI 集成有益的改进：
+
+- **时间上下文感知**：自动向 agent 上下文注入当前时间，帮助 Devin 更好地理解时间相关的请求
+- **输出处理重构**：改进流式输出性能，提升元宝对话体验
+- **思考边界修复**：改进 AI 回复格式化，减少 markdown 错误
+- **测试覆盖提升**：更稳定的代码质量，减少集成问题
 
 ---
 
@@ -353,6 +390,62 @@ OpenClaw 的 `/acp` 系列管理命令（`/acp status` `/acp cancel` `/acp model
 ---
 
 ## 9. 故障排查
+
+### 9.1 插件安装问题
+
+**问题**: 插件安装失败或版本不匹配
+
+**解决方案**:
+```bash
+# 检查当前插件版本
+openclaw plugins list | grep yuanbao
+
+# 如果版本不是 2.17.0+，需要更新
+openclaw plugins uninstall openclaw-plugin-yuanbao --force
+cd /path/to/yuanbao-openclaw-plugin
+pnpm install  # 如果从源码安装
+npx tsc       # 构建插件
+openclaw plugins install .
+openclaw gateway restart
+```
+
+### 9.2 构建依赖问题
+
+**问题**: `tsc: not found` 或构建失败
+
+**解决方案**:
+```bash
+# 确保安装了构建依赖
+cd /path/to/yuanbao-openclaw-plugin
+pnpm install
+
+# 如果 pnpm 不可用，使用 npm
+npm install
+npx tsc
+```
+
+### 9.3 配置丢失问题
+
+**问题**: 插件卸载后元宝配置丢失
+
+**解决方案**:
+插件卸载会移除 `channels.yuanbao` 配置，需要重新添加：
+
+```bash
+# 重新配置元宝 channel
+openclaw channels add --channel yuanbao --token "appKey:appSecret"
+
+# 或手动编辑 ~/.openclaw/openclaw.json 添加：
+# "channels": {
+#   "yuanbao": {
+#     "appKey": "your_app_key",
+#     "appSecret": "your_app_secret",
+#     ...
+#   }
+# }
+```
+
+### 9.4 原有故障排查
 
 | 现象 | 排查 |
 |------|------|
