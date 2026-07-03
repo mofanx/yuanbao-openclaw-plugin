@@ -135,6 +135,9 @@ BRIDGE="$BRIDGE_DIR/scripts/devin-acp-auth-bridge.mjs"
 
 openclaw config set plugins.entries.acpx.config.agents.devin.command "node"
 openclaw config set plugins.entries.acpx.config.agents.devin.args "[\"$BRIDGE\"]"
+
+# 增加超时时间到 600 秒（10分钟），避免复杂任务超时
+openclaw config set plugins.entries.acpx.config.timeoutSeconds 600
 ```
 
 或直接编辑 `~/.openclaw/openclaw.json`（完整配置见 §5）：
@@ -226,6 +229,10 @@ openclaw config set plugins.entries.acpx.config.agents.devin.args "[\"$BRIDGE\"]
 
 ```bash
 mkdir -p ~/.openclaw/workspace-devin
+
+# 配置 ACP 流式输出聚合时间（优化流式体验）
+openclaw config set acp.stream.coalesceIdleMs 300
+
 openclaw gateway restart
 
 # 观察网关日志确认正常启动
@@ -445,7 +452,48 @@ openclaw channels add --channel yuanbao --token "appKey:appSecret"
 # }
 ```
 
-### 9.4 原有故障排查
+### 9.4 Gateway 重启后 ACP 会话失效
+
+**问题**: Gateway 重启后，元宝中发送消息报错 `ACP_TURN_FAILED: ACP agent disconnected during request`
+
+**原因**: `persistent` 模式的 ACP 进程会在 Gateway 重启时被终止，旧的会话绑定失效。
+
+**解决方案**:
+```bash
+# 在元宝中重新执行
+/acp spawn devin --mode persistent --bind here
+```
+
+如果遇到错误，可以先取消再重新创建：
+```bash
+/acp cancel
+/acp spawn devin --mode persistent --bind here
+```
+
+**说明**:
+- 会话历史不会丢失，存储在 `~/.openclaw/agents/main/sessions/`
+- 只需要重新创建 ACP 进程会话，对话记录会保留
+- 这是 `persistent` 模式的正常行为，不是配置错误
+
+### 9.5 流式输出效果不明显
+
+**问题**: 在元宝中看不到流式输出效果，回复是一次性显示的
+
+**原因**: 
+- 元宝插件完全支持流式输出
+- 但实际效果取决于 Devin CLI ACP 模式的实现
+- Devin CLI ACP 模式可能默认不发送流式事件 (`onPartialReply`)
+
+**解决方案**:
+当前配置已优化流式参数：
+```bash
+openclaw config set acp.stream.coalesceIdleMs 300
+openclaw config set channels.yuanbao.outboundQueueStrategy "immediate"
+```
+
+如果仍然看不到流式效果，这是 Devin CLI ACP 模式的限制，需要等待 Devin CLI 更新流式支持。
+
+### 9.6 原有故障排查
 
 | 现象 | 排查 |
 |------|------|

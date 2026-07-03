@@ -263,6 +263,8 @@ openclaw config set plugins.entries.acpx.config.nonInteractivePermissions "deny"
 openclaw config set plugins.entries.acpx.config.probeAgent "devin"
 openclaw config set plugins.entries.acpx.config.agents.devin.command "node"
 openclaw config set plugins.entries.acpx.config.agents.devin.args "[\"$BRIDGE\"]"
+# 增加超时时间到 600 秒（10分钟），避免复杂任务超时
+openclaw config set plugins.entries.acpx.config.timeoutSeconds 600
 
 # 配置默认 agent
 openclaw config set agents.defaults.workspace "~/.openclaw/workspace-devin"
@@ -288,6 +290,9 @@ openclaw config patch --stdin << 'EOF'
   }
 }
 EOF
+
+# 配置 ACP 流式输出聚合时间（优化流式体验）
+openclaw config set acp.stream.coalesceIdleMs 300
 ```
 
 ### 5.5 配置元宝通道
@@ -397,12 +402,29 @@ openclaw logs --follow
 ✅ Spawned ACP session agent:devin:acp:xxx (persistent, backend acpx). Bound this conversation to agent:devin:acp:xxx.
 ```
 
+**重要提示 - Gateway 重启后恢复**：
+由于 `persistent` 模式的 ACP 进程会在 Gateway 重启时被终止，重启后需要重新执行：
+```
+/acp spawn devin --mode persistent --bind here
+```
+
+如果遇到 `ACP_TURN_FAILED` 错误，可以先取消再重新创建：
+```
+/acp cancel
+/acp spawn devin --mode persistent --bind here
+```
+
 ### 7.2 私聊方式
 
 1. 在元宝 APP 中找到你的机器人
 2. 发送 `/acp spawn devin --mode persistent --bind here` 启动 ACP 会话
 3. 发送消息给机器人
 4. 机器人会通过 Devin CLI 处理你的请求并返回回复
+
+**关于流式输出**：
+- 元宝插件支持流式输出，但实际效果取决于 Devin CLI ACP 模式的实现
+- 当前配置已优化流式参数（`acp.stream.coalesceIdleMs: 300`）
+- 如果看不到流式效果，这是因为 Devin CLI ACP 模式可能默认不发送流式事件
 
 ### 7.3 群聊方式
 
@@ -452,7 +474,28 @@ echo 'export PATH="$PATH:$(npm config get prefix)/bin"' >> ~/.bashrc
 source ~/.bashrc
 ```
 
-### 8.2 `Agent not in allowlist`
+### 8.2 Gateway 重启后 ACP 会话失效
+
+**原因**：`persistent` 模式的 ACP 进程会在 Gateway 重启时被终止，旧的会话绑定失效。
+
+**解决**：
+```bash
+# 在元宝中重新执行
+/acp spawn devin --mode persistent --bind here
+```
+
+如果遇到错误，可以先取消再重新创建：
+```bash
+/acp cancel
+/acp spawn devin --mode persistent --bind here
+```
+
+**说明**：
+- 会话历史不会丢失，存储在 `~/.openclaw/agents/main/sessions/`
+- 只需要重新创建 ACP 进程会话，对话记录会保留
+- 这是 `persistent` 模式的正常行为，不是配置错误
+
+### 8.3 `Agent not in allowlist`
 
 **原因**：`acp.allowedAgents` 配置中缺少 `"devin"`
 
