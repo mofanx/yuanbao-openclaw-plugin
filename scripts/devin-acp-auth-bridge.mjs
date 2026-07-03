@@ -19,6 +19,7 @@
 //   - 在第一条 `session/new` / `session/load` 之前，主动用 `_meta.api_key` 完成
 //     一次非交互认证（API key 默认从 ~/.local/share/devin/credentials.toml 读取）；
 //   - 若 acpx 自己发了 authenticate，则把 `_meta.api_key` 注入进去再转发；
+//   - 在 `session/new` 成功后，自动设置模型（通过 `session/set_config_option`）；
 //   - 其余所有消息（通知、权限请求、prompt、取消等）原样透传。
 //
 // 配置用法（OpenClaw acpx alias）：
@@ -40,6 +41,7 @@
 //   DEVIN_ACP_BRIDGE_DEBUG=1   打印调试日志到 stderr
 //   DEVIN_ACP_AUTH_RETRIES     认证失败（如 team settings 3s 超时）时的重试次数（默认 6）
 //   DEVIN_ACP_AUTH_RETRY_MS    每次重试之间的退避毫秒（默认 1500）
+//   DEVIN_MODEL         指定 Devin 使用的模型（如 "swe-1-6"）
 // =============================================================================
 
 import { spawn } from "node:child_process";
@@ -51,8 +53,11 @@ const DEVIN_BIN = process.env.DEVIN_BIN || "devin";
 const DEBUG = process.env.DEVIN_ACP_BRIDGE_DEBUG === "1";
 const AUTH_RETRIES = Number.parseInt(process.env.DEVIN_ACP_AUTH_RETRIES ?? "6", 10);
 const AUTH_RETRY_MS = Number.parseInt(process.env.DEVIN_ACP_AUTH_RETRY_MS ?? "1500", 10);
+const DEVIN_MODEL = process.env.DEVIN_MODEL || null;
 // 桥接器为自己发起的 authenticate 预留一个不会与 acpx 数字 id 冲突的字符串 id
 const BRIDGE_AUTH_ID = "__devin_acp_bridge_authenticate__";
+// 桥接器为自己发起的 set_config_option 预留一个不会与 acpx 数字 id 冲突的字符串 id
+const SET_MODEL_ID = "__devin_acp_bridge_set_model__";
 
 function logDebug(...args) {
   if (DEBUG) process.stderr.write(`[devin-acp-bridge] ${args.join(" ")}\n`);
@@ -275,6 +280,32 @@ function handleAgentLine(line) {
       authMethodId = methods[0].id;
       logDebug(`learned authMethodId=${authMethodId}`);
     }
+  }
+
+  // 处理 session/new 响应，自动设置模型
+  if (msg?.result && msg?.result?.sessionId && DEVIN_MODEL && msg?.id && !msg?.id.toString().startsWith("__")) {
+    logDebug(`session/new succeeded, setting model to ${DEVIN_MODEL}`);
+    // 发送 session/set_config_option 来设置模型
+    sendToDevin({
+      jsonrpc: "2.0",
+      id: SET_MODEL_ID,
+      method: "session/set_config_option",
+      params: {
+        sessionId: msg.result.sessionId,
+        configId: "model",
+        value: DEVIN_MODEL
+      }
+    });
+  }
+
+  // 消费掉桥接器自己发起的 set_config_option 的响应
+  if (msg?.id === SET_MODEL_ID) {
+    if (msg.error) {
+      logWarn(`failed to set model: ${JSON.stringify(msg.error)}`);
+    } else {
+      logDebug(`model set to ${DEVIN_MODEL} successfully`);
+    }
+    return;
   }
 
   rawToClient(line);
