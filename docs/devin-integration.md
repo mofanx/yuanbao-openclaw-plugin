@@ -517,7 +517,7 @@ openclaw config set channels.yuanbao.outboundQueueStrategy "immediate"
 - 认证桥接器没有传递模型配置给 `devin acp` 进程
 
 **解决方案**:
-通过环境变量 `DEVIN_MODEL` 显式指定模型：
+通过环境变量 `DEVIN_MODEL` 显式指定模型。认证桥接器会自动在 `session/new` 成功后通过 ACP 协议的 `session/set_config_option` 方法设置模型：
 
 ```bash
 # 如果使用 systemd 服务，添加环境变量到服务文件
