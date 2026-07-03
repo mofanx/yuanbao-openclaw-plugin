@@ -233,6 +233,20 @@ mkdir -p ~/.openclaw/workspace-devin
 # 配置 ACP 流式输出聚合时间（优化流式体验）
 openclaw config set acp.stream.coalesceIdleMs 300
 
+# 配置 Devin ACP 模式使用的模型（重要！）
+# devin acp 命令默认不读取 ~/.config/devin/config.json 中的模型配置
+# 需要通过环境变量 DEVIN_MODEL 显式指定模型
+# 常用模型：swe-1-6（免费）、claude-sonnet-4-20250514（付费）
+if [ -f ~/.config/systemd/user/openclaw-gateway.service ]; then
+  # 如果使用 systemd 服务，添加环境变量到服务文件
+  sed -i '/Environment=DEVIN_ACP_BRIDGE_DEBUG=1/a Environment=DEVIN_MODEL=swe-1-6' ~/.config/systemd/user/openclaw-gateway.service
+  systemctl --user daemon-reload
+else
+  # 如果不使用 systemd，需要手动设置环境变量
+  echo "export DEVIN_MODEL=swe-1-6" >> ~/.bashrc
+  source ~/.bashrc
+fi
+
 openclaw gateway restart
 
 # 观察网关日志确认正常启动
@@ -493,7 +507,40 @@ openclaw config set channels.yuanbao.outboundQueueStrategy "immediate"
 
 如果仍然看不到流式效果，这是 Devin CLI ACP 模式的限制，需要等待 Devin CLI 更新流式支持。
 
-### 9.6 原有故障排查
+### 9.6 ACP 模式使用的模型不正确
+
+**问题**: 在元宝中收到"当日限额已使用完毕"的提示，但直接使用 Devin CLI 时没有此问题
+
+**原因**:
+- `devin acp` 命令默认不读取 `~/.config/devin/config.json` 中的模型配置
+- ACP 模式使用账户的默认模型（可能是付费模型），而不是配置文件中的 `swe-1-6`
+- 认证桥接器没有传递模型配置给 `devin acp` 进程
+
+**解决方案**:
+通过环境变量 `DEVIN_MODEL` 显式指定模型：
+
+```bash
+# 如果使用 systemd 服务，添加环境变量到服务文件
+sed -i '/Environment=DEVIN_ACP_BRIDGE_DEBUG=1/a Environment=DEVIN_MODEL=swe-1-6' ~/.config/systemd/user/openclaw-gateway.service
+systemctl --user daemon-reload
+systemctl --user restart openclaw-gateway.service
+
+# 如果不使用 systemd，手动设置环境变量
+export DEVIN_MODEL=swe-1-6
+```
+
+**常用模型**:
+- `swe-1-6`: 免费模型，无每日限额
+- `claude-sonnet-4-20250514`: 付费模型，性能更强但有配额限制
+
+**验证配置**:
+```bash
+# 检查 Gateway 进程的环境变量
+ps aux | grep openclaw-gateway
+cat /proc/<PID>/environ | tr '\0' '\n' | grep DEVIN_MODEL
+```
+
+### 9.7 原有故障排查
 
 | 现象 | 排查 |
 |------|------|

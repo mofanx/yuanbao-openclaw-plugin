@@ -293,6 +293,13 @@ EOF
 
 # 配置 ACP 流式输出聚合时间（优化流式体验）
 openclaw config set acp.stream.coalesceIdleMs 300
+
+# 配置 Devin ACP 模式使用的模型（重要！）
+# devin acp 命令默认不读取 ~/.config/devin/config.json 中的模型配置
+# 需要通过环境变量 DEVIN_MODEL 显式指定模型
+# 常用模型：swe-1-6（免费）、claude-sonnet-4-20250514（付费）
+sed -i '/Environment=DEVIN_ACP_BRIDGE_DEBUG=1/a Environment=DEVIN_MODEL=swe-1-6' ~/.config/systemd/user/openclaw-gateway.service
+systemctl --user daemon-reload
 ```
 
 ### 5.5 配置元宝通道
@@ -495,7 +502,37 @@ source ~/.bashrc
 - 只需要重新创建 ACP 进程会话，对话记录会保留
 - 这是 `persistent` 模式的正常行为，不是配置错误
 
-### 8.3 `Agent not in allowlist`
+### 8.3 ACP 模式使用的模型不正确
+
+**问题**：在元宝中收到"当日限额已使用完毕"的提示，但直接使用 Devin CLI 时没有此问题
+
+**原因**：
+- `devin acp` 命令默认不读取 `~/.config/devin/config.json` 中的模型配置
+- ACP 模式使用账户的默认模型（可能是付费模型），而不是配置文件中的 `swe-1-6`
+- 认证桥接器没有传递模型配置给 `devin acp` 进程
+
+**解决**：
+通过环境变量 `DEVIN_MODEL` 显式指定模型：
+
+```bash
+# 添加环境变量到 systemd 服务文件
+sed -i '/Environment=DEVIN_ACP_BRIDGE_DEBUG=1/a Environment=DEVIN_MODEL=swe-1-6' ~/.config/systemd/user/openclaw-gateway.service
+systemctl --user daemon-reload
+systemctl --user restart openclaw-gateway.service
+```
+
+**常用模型**：
+- `swe-1-6`: 免费模型，无每日限额
+- `claude-sonnet-4-20250514`: 付费模型，性能更强但有配额限制
+
+**验证配置**：
+```bash
+# 检查 Gateway 进程的环境变量
+ps aux | grep openclaw-gateway
+cat /proc/<PID>/environ | tr '\0' '\n' | grep DEVIN_MODEL
+```
+
+### 8.4 `Agent not in allowlist`
 
 **原因**：`acp.allowedAgents` 配置中缺少 `"devin"`
 
@@ -514,7 +551,7 @@ acp: {
 openclaw gateway restart
 ```
 
-### 8.3 Devin 启动后报 "Permission prompt unavailable"
+### 8.5 Devin 启动后报 "Permission prompt unavailable"
 
 **原因**：`permissionMode` 未设置为 `"approve-all"`
 
@@ -539,7 +576,7 @@ plugins: {
 openclaw gateway restart
 ```
 
-### 8.4 元宝里收不到流式增量
+### 8.6 元宝里收不到流式增量
 
 **原因**：`acp.stream.coalesceIdleMs` 与 `channels.yuanbao.idleMs` 配置冲突
 
@@ -564,7 +601,7 @@ channels: {
 openclaw gateway restart
 ```
 
-### 8.5 元宝报错 `Permission denied: an internal error occurred (trace ID: ...)`
+### 8.7 元宝报错 `Permission denied: an internal error occurred (trace ID: ...)`
 
 **根本原因**：Devin CLI 2026.5.x ACP 模式故意不使用本地 `devin auth login` 的凭据，要求 ACP host 通过 `_meta.api_key` 显式认证。未经认证的会话在收到 prompt 时会从 Devin 服务器返回此错误。
 
@@ -611,7 +648,7 @@ EOF
 # 应看到：ACP: API key provided directly via authenticate meta
 ```
 
-### 8.6 网关无法启动
+### 8.8 网关无法启动
 
 **原因**：配置文件语法错误
 
@@ -627,7 +664,7 @@ openclaw logs --follow
 cat ~/.openclaw/config.json5
 ```
 
-### 8.7 元宝机器人无响应
+### 8.9 元宝机器人无响应
 
 **排查步骤**：
 
@@ -648,7 +685,7 @@ openclaw doctor
 # 确认 appKey 和 appSecret 配置无误
 ```
 
-### 8.8 工作目录权限问题
+### 8.10 工作目录权限问题
 
 **原因**：Devin 无法读写工作目录
 
