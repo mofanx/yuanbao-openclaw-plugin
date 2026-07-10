@@ -45,7 +45,7 @@
 // =============================================================================
 
 import { spawn } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 
@@ -53,7 +53,25 @@ const DEVIN_BIN = process.env.DEVIN_BIN || "devin";
 const DEBUG = process.env.DEVIN_ACP_BRIDGE_DEBUG === "1";
 const AUTH_RETRIES = Number.parseInt(process.env.DEVIN_ACP_AUTH_RETRIES ?? "6", 10);
 const AUTH_RETRY_MS = Number.parseInt(process.env.DEVIN_ACP_AUTH_RETRY_MS ?? "1500", 10);
-const DEVIN_MODEL = process.env.DEVIN_MODEL || null;
+
+function resolveModel() {
+  // File written by /model command takes precedence over env var
+  const modelFile = path.join(homedir(), ".config", "devin", "acp-model.json");
+  if (existsSync(modelFile)) {
+    try {
+      const data = JSON.parse(readFileSync(modelFile, "utf8"));
+      if (data.model) {
+        logDebug(`using model from ${modelFile}: ${data.model}`);
+        return data.model;
+      }
+    } catch (err) {
+      logWarn(`failed to read model file ${modelFile}: ${err?.message || err}`);
+    }
+  }
+  return process.env.DEVIN_MODEL || null;
+}
+
+const DEVIN_MODEL = resolveModel();
 // 桥接器为自己发起的 authenticate 预留一个不会与 acpx 数字 id 冲突的字符串 id
 const BRIDGE_AUTH_ID = "__devin_acp_bridge_authenticate__";
 // 桥接器为自己发起的 set_config_option 预留一个不会与 acpx 数字 id 冲突的字符串 id

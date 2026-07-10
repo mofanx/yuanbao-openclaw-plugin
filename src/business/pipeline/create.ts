@@ -12,6 +12,7 @@ import {
   resolveQuote,
   recordMember,
   guardSpecialCommand,
+  customCommandDispatcher,
   guardCommand,
   resolveMention,
   guardGroupCommand,
@@ -36,6 +37,7 @@ export function createPipeline(): MessagePipeline {
       .use(recordMember) // Record group member info (group chat)
       // Phase 2: Guards
       .use(guardSpecialCommand) // Upgrade command / issue-log owner guard
+      .use(customCommandDispatcher) // Personal custom slash commands
       .use(guardCommand) // SDK resolveControlCommandGate
       .use(resolveMention) // SDK resolveMentionGatingWithBypass (group chat)
       .use(guardGroupCommand) // Group command whitelist (group chat)

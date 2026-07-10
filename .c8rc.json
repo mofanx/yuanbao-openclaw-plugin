@@ -22,6 +22,7 @@
     "src/business/commands/log-upload/cos-upload.ts",
     "src/business/commands/log-upload/index.ts",
     "src/business/commands/log-upload/extractor.ts",
+    "src/business/custom-commands/**",
     "src/business/utils/media.ts",
     "src/business/actions/sticker/sticker-cache.ts",
     "src/business/actions/sticker/init-builtin-stickers.ts",

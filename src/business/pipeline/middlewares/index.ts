@@ -19,3 +19,4 @@ export { resolveTrace } from "./resolve-trace.js";
 export { buildContext } from "./build-context.js";
 export { prepareSender } from "./prepare-sender.js";
 export { dispatchReply } from "./dispatch-reply.js";
+export { customCommandDispatcher } from "../../custom-commands/dispatcher.js";
