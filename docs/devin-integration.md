@@ -235,10 +235,10 @@ openclaw config set acp.stream.coalesceIdleMs 300
 
 # 配置 Devin ACP 模式使用的模型（重要！）
 # devin acp 命令默认不读取 ~/.config/devin/config.json 中的模型配置
-# 需要通过环境变量 DEVIN_MODEL 显式指定模型
+# 可通过环境变量 DEVIN_MODEL 或插件 /model 命令显式指定模型
 # 常用模型：swe-1-6（免费）、claude-sonnet-4-20250514（付费）
 if [ -f ~/.config/systemd/user/openclaw-gateway.service ]; then
-  # 如果使用 systemd 服务，添加环境变量到服务文件
+  # 如果使用 systemd 服务，添加环境变量到服务文件作为默认模型
   sed -i '/Environment=DEVIN_ACP_BRIDGE_DEBUG=1/a Environment=DEVIN_MODEL=swe-1-6' ~/.config/systemd/user/openclaw-gateway.service
   systemctl --user daemon-reload
 else
@@ -253,26 +253,65 @@ openclaw gateway restart
 tail -f /tmp/openclaw/openclaw-$(date +%Y-%m-%d).log | grep -E "acpx|bridge|devin|error"
 ```
 
-### 4.5 插件更新
+### 4.5 运行时切换模型（`/model` 命令）
+
+插件提供 `/model` 命令，允许在聊天中直接切换当前 Devin ACP 会话使用的模型，无需重启网关或创建新会话。
+
+```bash
+# 切换到指定模型
+/model swe-1-7
+
+# 查看当前模型
+/model
+```
+
+工作原理：
+- `/model <model>` 将所选模型写入 `~/.config/devin/acp-model.json`
+- `devin-acp-auth-bridge.mjs` 通过 `fs.watch` 监听该文件
+- 文件变化时，桥接器立即向当前 ACP 会话发送 `session/set_config_option` 更新模型
+- 切换会在当前会话的**下一条消息**生效，历史记录不丢失
+
+`~/.config/devin/acp-model.json` 示例：
+
+```json
+{
+  "model": "swe-1-7",
+  "updatedAt": 1720630000000
+}
+```
+
+模型优先级：
+1. `~/.config/devin/acp-model.json`（`/model` 命令写入，最高优先级）
+2. `DEVIN_MODEL` 环境变量
+3. Devin CLI 账户默认模型
+
+### 4.6 插件更新
 
 如果插件已安装，需要更新到最新版本以获得最新功能：
 
 ```bash
-# 卸载旧版本
-openclaw plugins uninstall openclaw-plugin-yuanbao --force
-
-# 重新安装最新版本
+# 方案 A：在源码目录重新构建并同步到扩展目录
 cd /path/to/yuanbao-openclaw-plugin
-openclaw plugins install .
+pnpm build
+# 同步 dist/ 和 scripts/ 到 OpenClaw 扩展目录
+rsync -av --delete dist/ ~/.openclaw/extensions/openclaw-plugin-yuanbao/dist/
+rsync -av --delete scripts/ ~/.openclaw/extensions/openclaw-plugin-yuanbao/scripts/
+
+# 方案 B：卸载后重新安装（会丢失 channel 配置，需重新添加）
+# openclaw plugins uninstall openclaw-plugin-yuanbao --force
+# openclaw plugins install .
 
 # 重启网关
 openclaw gateway restart
 ```
 
-### 4.6 新版本特性（v2.17.0）
+### 4.7 新版本特性（v2.17.0+）
 
-插件 v2.17.0 包含以下对 Devin CLI 集成有益的改进：
+插件 v2.17.0 及后续版本包含以下对 Devin CLI 集成有益的改进：
 
+- **`/model` 自定义命令**：在聊天中直接切换 Devin ACP 模型，无需重启网关或创建新会话
+- **模型文件热监听**：桥接器监听 `~/.config/devin/acp-model.json` 变化并实时应用 `session/set_config_option`
+- **中会话模型切换**：切换模型后历史记录不丢失，下一条消息使用新模型
 - **时间上下文感知**：自动向 agent 上下文注入当前时间，帮助 Devin 更好地理解时间相关的请求
 - **输出处理重构**：改进流式输出性能，提升元宝对话体验
 - **思考边界修复**：改进 AI 回复格式化，减少 markdown 错误
@@ -367,9 +406,13 @@ Devin CLI 2026.5.26-0 及更高版本引入了多项重要的 ACP 相关改进�
 | `WINDSURF_API_KEY`        | 同上，备用变量名                                 | —            |
 | `DEVIN_BIN`               | devin 可执行文件路径                             | `"devin"`    |
 | `DEVIN_CREDENTIALS_PATH`  | credentials.toml 路径                           | XDG 标准路径 |
+| `DEVIN_MODEL`             | 默认 Devin ACP 模型（如 `swe-1-6`）              | —            |
 | `DEVIN_ACP_AUTH_RETRIES`  | 认证超时重试次数                                 | `6`          |
 | `DEVIN_ACP_AUTH_RETRY_MS` | 每次重试间隔（毫秒）                             | `1500`       |
 | `DEVIN_ACP_BRIDGE_DEBUG`  | 设为 `1` 开启详细日志                            | —            |
+
+`/model` 命令写入的模型文件路径：`~/.config/devin/acp-model.json`（优先级高于 `DEVIN_MODEL` 环境变量）。
+
 
 ---
 
@@ -422,11 +465,14 @@ OpenClaw 的 `/acp` 系列管理命令（`/acp status` `/acp cancel` `/acp model
 openclaw plugins list | grep yuanbao
 
 # 如果版本不是 2.17.0+，需要更新
-openclaw plugins uninstall openclaw-plugin-yuanbao --force
 cd /path/to/yuanbao-openclaw-plugin
 pnpm install  # 如果从源码安装
-npx tsc       # 构建插件
-openclaw plugins install .
+pnpm build    # 构建插件
+
+# 同步到 OpenClaw 扩展目录（推荐，不丢失 channel 配置）
+rsync -av --delete dist/ ~/.openclaw/extensions/openclaw-plugin-yuanbao/dist/
+rsync -av --delete scripts/ ~/.openclaw/extensions/openclaw-plugin-yuanbao/scripts/
+
 openclaw gateway restart
 ```
 
@@ -514,10 +560,18 @@ openclaw config set channels.yuanbao.outboundQueueStrategy "immediate"
 **原因**:
 - `devin acp` 命令默认不读取 `~/.config/devin/config.json` 中的模型配置
 - ACP 模式使用账户的默认模型（可能是付费模型），而不是配置文件中的 `swe-1-6`
-- 认证桥接器没有传递模型配置给 `devin acp` 进程
 
 **解决方案**:
-通过环境变量 `DEVIN_MODEL` 显式指定模型。认证桥接器会自动在 `session/new` 成功后通过 ACP 协议的 `session/set_config_option` 方法设置模型：
+
+**方式 1（推荐）**：在聊天中使用 `/model` 命令实时切换
+
+```bash
+/model swe-1-7
+```
+
+`/model` 命令写入 `~/.config/devin/acp-model.json`，桥接器监听到文件变化后立即通过 `session/set_config_option` 应用新模型，当前会话无需重启。
+
+**方式 2**：通过环境变量 `DEVIN_MODEL` 设置默认模型
 
 ```bash
 # 如果使用 systemd 服务，添加环境变量到服务文件
@@ -530,12 +584,15 @@ export DEVIN_MODEL=swe-1-6
 ```
 
 **常用模型**:
-- `swe-1-6`: 免费模型，无每日限额
+- `swe-1-6` / `swe-1-7`: 免费模型，无每日限额
 - `claude-sonnet-4-20250514`: 付费模型，性能更强但有配额限制
 
 **验证配置**:
 ```bash
-# 检查 Gateway 进程的环境变量
+# 检查 /model 写入的模型文件
+cat ~/.config/devin/acp-model.json
+
+# 检查 Gateway 进程的环境变量（如果使用 DEVIN_MODEL）
 ps aux | grep openclaw-gateway
 cat /proc/<PID>/environ | tr '\0' '\n' | grep DEVIN_MODEL
 ```
@@ -559,7 +616,7 @@ cat /proc/<PID>/environ | tr '\0' '\n' | grep DEVIN_MODEL
 
 - **权限**：`permissionMode: "approve-all"` 等于给 Devin 在 workspace 内完全自动放行。**务必**把 `agents.list[].workspace` 设为独立目录，不要指向家目录或代码仓库根。
 - **多账号**：桥接器从同一份 `credentials.toml` 读取凭据；不同 agent 共用同一份认证（Devin Pro 账号层面区分）。
-- **模型切换**：`/acp model ...` 命令对 Devin 可能无效，在 Devin 侧用 `~/.config/devin/config.json` 的 `agent.model` 字段配置。
+- **模型切换**：使用插件 `/model <model>` 命令切换模型，桥接器会写入 `~/.config/devin/acp-model.json` 并调用 `session/set_config_option`。`~/.config/devin/config.json` 中的 `agent.model` 对 `devin acp` 无效。
 - **Devin 协议变更**：Devin 升级后若 authenticate 策略调整，查看 `~/.openclaw/acpx/codex-acp-wrapper.stderr.*.log` 日志定位。
 
 ---

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Devin CLI 集成增强
+- **feat:** 添加 `/model` 自定义命令，用于在元宝聊天中切换 Devin ACP 模型
+- **feat:** 桥接器支持 `~/.config/devin/acp-model.json` 文件热监听，实时调用 `session/set_config_option`
+- **feat:** 中会话模型切换，切换模型后无需创建新会话，历史记录不丢失
+- **docs:** 更新 `docs/devin-integration.md`，补充 `/model` 命令、模型切换和插件更新说明
+
 ## 2.17.0 (2026-07-02) - feat/devin-bridge
 
 ### Devin CLI 集成功能

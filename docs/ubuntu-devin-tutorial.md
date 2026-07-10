@@ -294,10 +294,10 @@ EOF
 # 配置 ACP 流式输出聚合时间（优化流式体验）
 openclaw config set acp.stream.coalesceIdleMs 300
 
-# 配置 Devin ACP 模式使用的模型（重要！）
+# 配置 Devin ACP 模式默认模型（可选，也可用 /model 命令在聊天中实时切换）
 # devin acp 命令默认不读取 ~/.config/devin/config.json 中的模型配置
-# 需要通过环境变量 DEVIN_MODEL 显式指定模型
-# 常用模型：swe-1-6（免费）、claude-sonnet-4-20250514（付费）
+# 可通过环境变量 DEVIN_MODEL 设置默认模型，或在聊天中发送 /model swe-1-7
+# 常用模型：swe-1-6 / swe-1-7（免费）、claude-sonnet-4-20250514（付费）
 sed -i '/Environment=DEVIN_ACP_BRIDGE_DEBUG=1/a Environment=DEVIN_MODEL=swe-1-6' ~/.config/systemd/user/openclaw-gateway.service
 systemctl --user daemon-reload
 ```
@@ -508,11 +508,21 @@ source ~/.bashrc
 
 **原因**：
 - `devin acp` 命令默认不读取 `~/.config/devin/config.json` 中的模型配置
-- ACP 模式使用账户的默认模型（可能是付费模型），而不是配置文件中的 `swe-1-6`
-- 认证桥接器没有传递模型配置给 `devin acp` 进程
+- ACP 模式使用账户的默认模型（可能是付费模型），而不是 `swe-1-6` 等免费模型
 
-**解决**：
-通过环境变量 `DEVIN_MODEL` 显式指定模型。认证桥接器会自动在 `session/new` 成功后通过 ACP 协议的 `session/set_config_option` 方法设置模型：
+**解决**（推荐方式）：
+
+**方式 1**：在元宝聊天中直接发送 `/model` 命令
+
+```bash
+/model swe-1-7
+```
+
+- `/model` 会写入 `~/.config/devin/acp-model.json`
+- 桥接器监听到文件变化后，立即调用 `session/set_config_option` 更新当前会话模型
+- 下一条消息即可使用新模型，历史记录不丢失
+
+**方式 2**：通过环境变量 `DEVIN_MODEL` 设置默认模型
 
 ```bash
 # 添加环境变量到 systemd 服务文件
@@ -522,12 +532,15 @@ systemctl --user restart openclaw-gateway.service
 ```
 
 **常用模型**：
-- `swe-1-6`: 免费模型，无每日限额
+- `swe-1-6` / `swe-1-7`: 免费模型，无每日限额
 - `claude-sonnet-4-20250514`: 付费模型，性能更强但有配额限制
 
 **验证配置**：
 ```bash
-# 检查 Gateway 进程的环境变量
+# 检查 /model 写入的模型文件
+cat ~/.config/devin/acp-model.json
+
+# 检查 Gateway 进程的环境变量（如使用 DEVIN_MODEL）
 ps aux | grep openclaw-gateway
 cat /proc/<PID>/environ | tr '\0' '\n' | grep DEVIN_MODEL
 ```
