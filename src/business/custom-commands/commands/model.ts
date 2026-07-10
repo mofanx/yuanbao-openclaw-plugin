@@ -68,7 +68,7 @@ const modelCommand = {
 
     await sendReply(
       ctx,
-      `✅ 已切换模型为 ${model}\n新会话生效，当前会话可发送 /new 或等待会话超时后重建。`,
+      `✅ 已切换模型为 ${model}\n当前 Devin ACP 会话会立即尝试应用新模型。`,
     );
     return true;
   },

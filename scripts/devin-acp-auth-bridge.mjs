@@ -45,7 +45,7 @@
 // =============================================================================
 
 import { spawn } from "node:child_process";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, watch, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 
@@ -54,24 +54,29 @@ const DEBUG = process.env.DEVIN_ACP_BRIDGE_DEBUG === "1";
 const AUTH_RETRIES = Number.parseInt(process.env.DEVIN_ACP_AUTH_RETRIES ?? "6", 10);
 const AUTH_RETRY_MS = Number.parseInt(process.env.DEVIN_ACP_AUTH_RETRY_MS ?? "1500", 10);
 
-function resolveModel() {
-  // File written by /model command takes precedence over env var
-  const modelFile = path.join(homedir(), ".config", "devin", "acp-model.json");
-  if (existsSync(modelFile)) {
+const MODEL_DIR = path.join(homedir(), ".config", "devin");
+const MODEL_FILE_NAME = "acp-model.json";
+const MODEL_FILE = path.join(MODEL_DIR, MODEL_FILE_NAME);
+
+function readModelFile() {
+  if (existsSync(MODEL_FILE)) {
     try {
-      const data = JSON.parse(readFileSync(modelFile, "utf8"));
-      if (data.model) {
-        logDebug(`using model from ${modelFile}: ${data.model}`);
-        return data.model;
-      }
+      const data = JSON.parse(readFileSync(MODEL_FILE, "utf8"));
+      if (data.model) return data.model;
     } catch (err) {
-      logWarn(`failed to read model file ${modelFile}: ${err?.message || err}`);
+      logWarn(`failed to read model file ${MODEL_FILE}: ${err?.message || err}`);
     }
   }
   return process.env.DEVIN_MODEL || null;
 }
 
-const DEVIN_MODEL = resolveModel();
+function resolveModel() {
+  const model = readModelFile();
+  if (model) logDebug(`using model from ${MODEL_FILE}: ${model}`);
+  return model;
+}
+
+let DEVIN_MODEL = resolveModel();
 // 桥接器为自己发起的 authenticate 预留一个不会与 acpx 数字 id 冲突的字符串 id
 const BRIDGE_AUTH_ID = "__devin_acp_bridge_authenticate__";
 // 桥接器为自己发起的 set_config_option 预留一个不会与 acpx 数字 id 冲突的字符串 id
@@ -147,6 +152,9 @@ let authState = "idle"; // idle | in-progress | done | unavailable
 let authAttempt = 0; // 已尝试的认证次数
 let authRetryTimer; // 重试定时器
 const queuedToDevin = []; // 认证完成前被暂存的 client->devin 消息（如 session/new）
+let activeSessionId; // 当前 ACP session id（从 session/new 响应获得）
+let modelChangeTimer; // 模型文件变动防抖定时器
+let pendingModelChange = false; // 是否有模型变动尚未发送 set_config_option
 
 // ---- 行缓冲：acpx(process.stdin) -> devin(child.stdin) ----
 let upBuf = "";
@@ -178,14 +186,61 @@ child.stdout.on("data", (chunk) => {
 function sendToDevin(obj) {
   child.stdin.write(JSON.stringify(obj) + "\n");
 }
-function sendToClient(obj) {
-  process.stdout.write(JSON.stringify(obj) + "\n");
-}
 function rawToDevin(line) {
   child.stdin.write(line + "\n");
 }
 function rawToClient(line) {
   process.stdout.write(line + "\n");
+}
+
+function setModel(model) {
+  if (!activeSessionId || !model) return;
+  logDebug(`sending session/set_config_option for session ${activeSessionId} model=${model}`);
+  sendToDevin({
+    jsonrpc: "2.0",
+    id: SET_MODEL_ID,
+    method: "session/set_config_option",
+    params: {
+      sessionId: activeSessionId,
+      configId: "model",
+      value: model,
+    },
+  });
+}
+
+function applyModelChange() {
+  const model = readModelFile();
+  if (!model) return;
+  if (model === DEVIN_MODEL) {
+    logDebug(`model file unchanged (${model}), skipping set_config_option`);
+    return;
+  }
+  DEVIN_MODEL = model;
+  if (!activeSessionId) {
+    logDebug(`no active session yet, model will be applied when session/new completes`);
+    pendingModelChange = true;
+    return;
+  }
+  setModel(model);
+}
+
+function startModelFileWatcher() {
+  try {
+    mkdirSync(MODEL_DIR, { recursive: true });
+    modelWatcher = watch(MODEL_DIR, (eventType, filename) => {
+      if (filename && filename !== MODEL_FILE_NAME) return;
+      clearTimeout(modelChangeTimer);
+      modelChangeTimer = setTimeout(() => {
+        logDebug(`model file ${MODEL_FILE} changed (event=${eventType})`);
+        applyModelChange();
+      }, 200);
+    });
+    modelWatcher.on("error", (err) => {
+      logWarn(`model file watcher error: ${err?.message || err}`);
+    });
+  } catch (err) {
+    logWarn(`cannot watch model directory ${MODEL_DIR}: ${err?.message || err}`);
+  }
 }
 
 function injectApiKeyMeta(params) {
@@ -301,19 +356,13 @@ function handleAgentLine(line) {
   }
 
   // 处理 session/new 响应，自动设置模型
-  if (msg?.result && msg?.result?.sessionId && DEVIN_MODEL && msg?.id && !msg?.id.toString().startsWith("__")) {
-    logDebug(`session/new succeeded, setting model to ${DEVIN_MODEL}`);
-    // 发送 session/set_config_option 来设置模型
-    sendToDevin({
-      jsonrpc: "2.0",
-      id: SET_MODEL_ID,
-      method: "session/set_config_option",
-      params: {
-        sessionId: msg.result.sessionId,
-        configId: "model",
-        value: DEVIN_MODEL
-      }
-    });
+  if (msg?.result?.sessionId && msg?.id && !msg?.id.toString().startsWith("__")) {
+    activeSessionId = msg.result.sessionId;
+    if (pendingModelChange || DEVIN_MODEL) {
+      const model = readModelFile() || DEVIN_MODEL;
+      pendingModelChange = false;
+      if (model) setModel(model);
+    }
   }
 
   // 消费掉桥接器自己发起的 set_config_option 的响应
@@ -329,6 +378,15 @@ function handleAgentLine(line) {
   rawToClient(line);
 }
 
-const shutdown = () => { try { clearTimeout(authRetryTimer); } catch {} try { child.kill("SIGTERM"); } catch {} };
+let modelWatcher;
+
+const shutdown = () => {
+  try { clearTimeout(authRetryTimer); } catch {}
+  try { clearTimeout(modelChangeTimer); } catch {}
+  try { modelWatcher?.close(); } catch {}
+  try { child.kill("SIGTERM"); } catch {}
+};
 process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);
+
+startModelFileWatcher();
