@@ -8,13 +8,15 @@ title: Yuanbao
 
 # Yuanbao
 
+[中文](./README_CN.md)
+
 Tencent Yuanbao is Tencent's AI assistant platform. The OpenClaw channel plugin
 connects Yuanbao bots to OpenClaw over WebSocket so they can interact with users
 through direct messages and group chats.
 
 **Status:** production-ready for bot DMs + group chats. WebSocket is the only supported connection mode.
 
-> **Devin CLI 集成**：本插件可与 [Devin CLI](https://cli.devin.ai/docs) 配合使用，让用户在元宝里直接对话 Devin。零代码改动，纯 OpenClaw `acpx` 配置即可。详见 [`docs/devin-integration.md`](docs/devin-integration.md)。
+> **Devin CLI integration**: This plugin can work with [Devin CLI](https://cli.devin.ai/docs) to let users chat with Devin directly from Yuanbao. Zero code changes, pure OpenClaw `acpx` configuration. For details, see [`docs/devin-integration.md`](docs/devin-integration.md).
 
 ---
 
@@ -22,7 +24,7 @@ through direct messages and group chats.
 
 > **Requires OpenClaw 2026.5.7 or above.** Run `openclaw --version` to check. Upgrade with `openclaw update`.
 >
-> **当前版本**: v2.17.0 - 包含时间上下文感知、输出处理重构等重要改进。
+> **Current version**: v2.17.0 - includes time context awareness, output processing refactor, and other important improvements.
 
 ### 1. Add the Yuanbao channel with your credentials
 
