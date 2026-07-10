@@ -30,3 +30,6 @@ Thumbs.db
 
 # Backup (重构前的老代码备份)
 back/
+
+# pnpm workspace / local build approval config
+pnpm-workspace.yaml
