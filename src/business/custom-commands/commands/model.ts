@@ -16,7 +16,59 @@ import type { PipelineContext } from "../../pipeline/types.js";
 
 const MODEL_FILE = join(homedir(), ".config", "devin", "acp-model.json");
 
-function resolveCurrentModel(): string {
+/** Known Devin ACP model identifiers. Short aliases resolve to the latest version. */
+export const KNOWN_MODELS: string[] = [
+  "swe-1-6",
+  "swe-1-7",
+  "swe-1-6-fast",
+  "swe-1-7-lightning",
+  "swe-1-5",
+  "swe-1",
+  "swe-1-mini",
+  "swe",
+  "opus",
+  "sonnet",
+  "codex",
+  "gemini",
+  "gpt",
+  "claude-sonnet-4-20250514",
+  "claude-opus-4-20250514",
+  "claude-sonnet-4-1-20250805",
+  "claude-opus-4-1-20250805",
+];
+
+function getAllowlist(): string[] {
+  const extra = process.env.DEVIN_MODEL_ALLOWLIST;
+  if (!extra) return [];
+  return extra
+    .split(",")
+    .map((m) => m.trim())
+    .filter(Boolean);
+}
+
+/** Return all valid model names including the static list and the env allowlist. */
+export function getKnownModels(): string[] {
+  return [...new Set([...KNOWN_MODELS, ...getAllowlist()])];
+}
+
+/** Check whether a model name is in the known list or the env allowlist. */
+export function isValidModel(model: string): boolean {
+  return getKnownModels().includes(model);
+}
+
+export function formatModelList(): string {
+  const models = getKnownModels();
+  const free = ["swe-1-6", "swe-1-7", "swe"];
+  const others = models.filter((m) => !free.includes(m));
+  return [
+    "免费/默认：",
+    ...free.filter((m) => models.includes(m)).map((m) => `  - ${m}`),
+    "其他可用模型：",
+    ...others.map((m) => `  - ${m}`),
+  ].join("\n");
+}
+
+export function resolveCurrentModel(): string {
   if (existsSync(MODEL_FILE)) {
     try {
       const data = JSON.parse(readFileSync(MODEL_FILE, "utf8")) as { model?: string };
@@ -35,7 +87,7 @@ function parseModelArg(ctx: PipelineContext): string | undefined {
   return parts[1] ?? undefined;
 }
 
-async function sendReply(ctx: PipelineContext, text: string): Promise<void> {
+export async function sendReply(ctx: PipelineContext, text: string): Promise<void> {
   await sendText({
     text,
     dt: {
@@ -59,7 +111,23 @@ const modelCommand = {
 
     if (!model) {
       const current = resolveCurrentModel();
-      await sendReply(ctx, `当前模型：${current}\n用法：/model <模型名>`);
+      await sendReply(
+        ctx,
+        `当前模型：${current}\n\n${formatModelList()}\n\n用法：/model <模型名>\n查看模型列表：/models`,
+      );
+      return true;
+    }
+
+    if (model === "list") {
+      await sendReply(ctx, `可用模型列表：\n\n${formatModelList()}\n\n当前模型：${resolveCurrentModel()}`);
+      return true;
+    }
+
+    if (!isValidModel(model)) {
+      await sendReply(
+        ctx,
+        `❌ 未知模型：${model}\n\n${formatModelList()}\n\n请使用列表中的模型名，或通过 DEVIN_MODEL_ALLOWLIST 环境变量添加额外模型。`,
+      );
       return true;
     }
 

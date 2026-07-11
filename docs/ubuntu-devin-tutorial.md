@@ -521,6 +521,12 @@ source ~/.bashrc
 - `/model` 会写入 `~/.config/devin/acp-model.json`
 - 桥接器监听到文件变化后，立即调用 `session/set_config_option` 更新当前会话模型
 - 下一条消息即可使用新模型，历史记录不丢失
+- 输入错误模型名时 `/model` 会拒绝切换并提示可用列表，避免会话异常
+
+```bash
+# 查看可用模型列表
+/models
+```
 
 **方式 2**：通过环境变量 `DEVIN_MODEL` 设置默认模型
 

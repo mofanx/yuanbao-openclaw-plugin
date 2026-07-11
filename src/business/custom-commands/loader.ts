@@ -6,3 +6,4 @@
  */
 
 import "./commands/model.js";
+import "./commands/models.js";

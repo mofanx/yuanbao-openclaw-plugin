@@ -263,10 +263,18 @@ tail -f /tmp/openclaw/openclaw-$(date +%Y-%m-%d).log | grep -E "acpx|bridge|devi
 
 # 查看当前模型
 /model
+
+# 查看可用模型列表
+/models
 ```
 
+**模型名称校验**：
+- `/model <model>` 会先校验模型名是否在已知列表中，不在列表的名称会被拒绝，避免写入错误配置导致会话异常。
+- 可用列表可以通过 `/models` 命令查看。
+- 如果 Devin 支持某个模型但不在默认列表中，可以在 Gateway 环境变量中添加 `DEVIN_MODEL_ALLOWLIST=模型1,模型2`，或修改 `src/business/custom-commands/commands/model.ts` 中的 `KNOWN_MODELS` 后重新构建。
+
 工作原理：
-- `/model <model>` 将所选模型写入 `~/.config/devin/acp-model.json`
+- `/model <model>` 将校验后的模型写入 `~/.config/devin/acp-model.json`
 - `devin-acp-auth-bridge.mjs` 通过 `fs.watch` 监听该文件
 - 文件变化时，桥接器立即向当前 ACP 会话发送 `session/set_config_option` 更新模型
 - 切换会在当前会话的**下一条消息**生效，历史记录不丢失
