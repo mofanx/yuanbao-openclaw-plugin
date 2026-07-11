@@ -7,35 +7,58 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { sendText } from "../../actions/text/send.js";
 import { registerPluginCommand } from "../../commands/command-sync/index.js";
 import { registerCustomCommand } from "../registry.js";
 import { extractCommandText, parseCommandParts } from "../utils.js";
 import type { PipelineContext } from "../../pipeline/types.js";
 
-const MODEL_FILE = join(homedir(), ".config", "devin", "acp-model.json");
+const DEVIN_CONFIG_DIR = join(homedir(), ".config", "devin");
+const MODEL_FILE = join(DEVIN_CONFIG_DIR, "acp-model.json");
+const USER_MODELS_FILE = join(DEVIN_CONFIG_DIR, "acp-models.json");
 
-/** Known Devin ACP model identifiers. Short aliases resolve to the latest version. */
-export const KNOWN_MODELS: string[] = [
-  "swe-1-6",
-  "swe-1-7",
-  "swe-1-6-fast",
-  "swe-1-7-lightning",
-  "swe-1-5",
-  "swe-1",
-  "swe-1-mini",
-  "swe",
-  "opus",
-  "sonnet",
-  "codex",
-  "gemini",
-  "gpt",
-  "claude-sonnet-4-20250514",
-  "claude-opus-4-20250514",
-  "claude-sonnet-4-1-20250805",
-  "claude-opus-4-1-20250805",
-];
+/** Minimal fallback when no config file is found. */
+const FALLBACK_MODELS: string[] = ["swe-1-6", "swe-1-7"];
+const FALLBACK_FREE: string[] = ["swe-1-6", "swe-1-7"];
+
+/** Path to the default-models.json shipped with the plugin (in scripts/ dir). */
+function resolveDefaultModelsPath(): string {
+  try {
+    let dir = dirname(fileURLToPath(import.meta.url));
+    // Walk up until we find scripts/default-models.json (handles dist/ or dist/src/ layouts)
+    for (let i = 0; i < 8; i++) {
+      const candidate = join(dir, "scripts", "default-models.json");
+      if (existsSync(candidate)) return candidate;
+      dir = dirname(dir);
+    }
+  } catch {
+    // ignore
+  }
+  return join(homedir(), ".openclaw", "extensions", "openclaw-plugin-yuanbao", "scripts", "default-models.json");
+}
+
+type ModelsConfig = { models: string[]; free: string[] };
+
+function readModelsJson(filePath: string): ModelsConfig | null {
+  if (!existsSync(filePath)) return null;
+  try {
+    const data = JSON.parse(readFileSync(filePath, "utf8")) as Partial<ModelsConfig>;
+    const models = Array.isArray(data.models)
+      ? data.models.filter((m): m is string => typeof m === "string" && m.length > 0)
+      : [];
+    if (models.length > 0) {
+      const free = Array.isArray(data.free)
+        ? data.free.filter((m): m is string => typeof m === "string" && models.includes(m))
+        : [];
+      return { models, free };
+    }
+  } catch {
+    // ignore parse errors
+  }
+  return null;
+}
 
 function getAllowlist(): string[] {
   const extra = process.env.DEVIN_MODEL_ALLOWLIST;
@@ -46,19 +69,42 @@ function getAllowlist(): string[] {
     .filter(Boolean);
 }
 
-/** Return all valid model names including the static list and the env allowlist. */
-export function getKnownModels(): string[] {
-  return [...new Set([...KNOWN_MODELS, ...getAllowlist()])];
+/**
+ * Resolve the full model list using layered config:
+ *   1. DEVIN_MODEL_ALLOWLIST env var (always appended)
+ *   2. ~/.config/devin/acp-models.json (user override, replaces defaults if present)
+ *   3. scripts/default-models.json (shipped with plugin)
+ *   4. hardcoded fallback
+ */
+function resolveModelsConfig(): ModelsConfig {
+  // Layer 2: user override
+  const userConfig = readModelsJson(USER_MODELS_FILE);
+  if (userConfig) {
+    return { models: [...new Set([...userConfig.models, ...getAllowlist()])], free: userConfig.free };
+  }
+
+  // Layer 3: shipped defaults
+  const defaultConfig = readModelsJson(resolveDefaultModelsPath());
+  if (defaultConfig) {
+    return { models: [...new Set([...defaultConfig.models, ...getAllowlist()])], free: defaultConfig.free };
+  }
+
+  // Layer 4: fallback
+  return { models: [...new Set([...FALLBACK_MODELS, ...getAllowlist()])], free: FALLBACK_FREE };
 }
 
-/** Check whether a model name is in the known list or the env allowlist. */
+/** Return all valid model names. */
+export function getKnownModels(): string[] {
+  return resolveModelsConfig().models;
+}
+
+/** Check whether a model name is in the known list. */
 export function isValidModel(model: string): boolean {
   return getKnownModels().includes(model);
 }
 
 export function formatModelList(): string {
-  const models = getKnownModels();
-  const free = ["swe-1-6", "swe-1-7", "swe"];
+  const { models, free } = resolveModelsConfig();
   const others = models.filter((m) => !free.includes(m));
   return [
     "免费/默认：",
@@ -126,7 +172,7 @@ const modelCommand = {
     if (!isValidModel(model)) {
       await sendReply(
         ctx,
-        `❌ 未知模型：${model}\n\n${formatModelList()}\n\n请使用列表中的模型名，或通过 DEVIN_MODEL_ALLOWLIST 环境变量添加额外模型。`,
+        `❌ 未知模型：${model}\n\n${formatModelList()}\n\n请使用列表中的模型名。如需添加自定义模型，可编辑 ~/.config/devin/acp-models.json 或设置 DEVIN_MODEL_ALLOWLIST 环境变量。`,
       );
       return true;
     }

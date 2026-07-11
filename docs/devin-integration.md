@@ -236,7 +236,7 @@ openclaw config set acp.stream.coalesceIdleMs 300
 # 配置 Devin ACP 模式使用的模型（重要！）
 # devin acp 命令默认不读取 ~/.config/devin/config.json 中的模型配置
 # 可通过环境变量 DEVIN_MODEL 或插件 /model 命令显式指定模型
-# 常用模型：swe-1-6（免费）、claude-sonnet-4-20250514（付费）
+# 可用模型：swe-1-6 / swe-1-7（免费）、swe-1-6-fast / swe-1-7-lightning（低成本）、adaptive / deepseek-v4 / glm-5-2 / gpt-5-6-luna-medium
 if [ -f ~/.config/systemd/user/openclaw-gateway.service ]; then
   # 如果使用 systemd 服务，添加环境变量到服务文件作为默认模型
   sed -i '/Environment=DEVIN_ACP_BRIDGE_DEBUG=1/a Environment=DEVIN_MODEL=swe-1-6' ~/.config/systemd/user/openclaw-gateway.service
@@ -268,10 +268,44 @@ tail -f /tmp/openclaw/openclaw-$(date +%Y-%m-%d).log | grep -E "acpx|bridge|devi
 /models
 ```
 
-**模型名称校验**：
-- `/model <model>` 会先校验模型名是否在已知列表中，不在列表的名称会被拒绝，避免写入错误配置导致会话异常。
+**模型名称校验与配置**：
+- `/model <model>` 会先校验模型名是否在可用列表中，不在列表的名称会被拒绝，避免写入错误配置导致会话异常。
 - 可用列表可以通过 `/models` 命令查看。
-- 如果 Devin 支持某个模型但不在默认列表中，可以在 Gateway 环境变量中添加 `DEVIN_MODEL_ALLOWLIST=模型1,模型2`，或修改 `src/business/custom-commands/commands/model.ts` 中的 `KNOWN_MODELS` 后重新构建。
+
+可用模型列表采用分层配置，优先级从高到低：
+
+| 层级 | 来源 | 说明 |
+|------|------|------|
+| 1 | `DEVIN_MODEL_ALLOWLIST` 环境变量 | 临时追加，始终合并到最终列表 |
+| 2 | `~/.config/devin/acp-models.json` | 用户自定义列表，存在则**完全替代**默认列表 |
+| 3 | `scripts/default-models.json` | 随插件发布的默认列表，rsync 即可更新 |
+| 4 | 代码内极简 fallback | 仅当以上文件都不存在时使用 |
+
+**更新默认模型列表**（无需重新构建）：
+```bash
+# 编辑插件目录下的默认列表
+vim ~/.openclaw/extensions/openclaw-plugin-yuanbao/scripts/default-models.json
+# 重启网关生效
+openclaw gateway restart
+```
+
+**用户自定义模型列表**：
+```bash
+# 创建用户级覆盖文件（将替代默认列表）
+cat > ~/.config/devin/acp-models.json << 'EOF'
+{
+  "models": ["swe-1-7", "adaptive", "deepseek-v4", "my-custom-model"],
+  "free": ["swe-1-7"]
+}
+EOF
+# 无需重启，下次 /model 或 /models 命令即生效
+```
+
+**环境变量临时追加**：
+```bash
+# 在 systemd 服务文件中添加
+Environment=DEVIN_MODEL_ALLOWLIST=model-a,model-b
+```
 
 工作原理：
 - `/model <model>` 将校验后的模型写入 `~/.config/devin/acp-model.json`
@@ -591,9 +625,15 @@ systemctl --user restart openclaw-gateway.service
 export DEVIN_MODEL=swe-1-6
 ```
 
-**常用模型**:
-- `swe-1-6` / `swe-1-7`: 免费模型，无每日限额
-- `claude-sonnet-4-20250514`: 付费模型，性能更强但有配额限制
+**可用模型**（通过 Devin CLI `/model` 命令验证）：
+- `swe-1-6` / `swe-1-7`: SWE 系列免费模型
+- `swe-1-6-fast` / `swe-1-7-lightning`: SWE 系列低成本模型
+- `adaptive`: 自适应模型
+- `deepseek-v4`: DeepSeek V4
+- `glm-5-2`: GLM 5.2
+- `gpt-5-6-luna-medium`: GPT 5.6 Luna Medium
+
+使用 `/models` 命令可随时查看完整列表。
 
 **验证配置**:
 ```bash

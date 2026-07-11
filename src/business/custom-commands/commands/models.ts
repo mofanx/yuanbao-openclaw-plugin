@@ -18,7 +18,12 @@ const modelsCommand = {
   requireOwner: true,
   handler: async (ctx: PipelineContext): Promise<boolean> => {
     const current = resolveCurrentModel();
-    const currentHint = isValidModel(current) ? "" : "（该模型不在已知列表中）";
+    let currentHint = "";
+    if (current === "default") {
+      currentHint = "（未显式配置）";
+    } else if (!isValidModel(current)) {
+      currentHint = "（该模型不在已知列表中）";
+    }
     await sendReply(
       ctx,
       `当前模型：${current}${currentHint}\n\n${formatModelList()}\n\n用法：/model <模型名>`,

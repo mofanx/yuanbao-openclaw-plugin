@@ -1,0 +1,16 @@
+{
+  "models": [
+    "adaptive",
+    "deepseek-v4",
+    "glm-5-2",
+    "swe-1-7",
+    "swe-1-7-lightning",
+    "gpt-5-6-luna-medium",
+    "swe-1-6",
+    "swe-1-6-fast"
+  ],
+  "free": [
+    "swe-1-6",
+    "swe-1-7"
+  ]
+}
