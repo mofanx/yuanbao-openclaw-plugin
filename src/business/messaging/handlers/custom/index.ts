@@ -119,8 +119,20 @@ export const customHandler: MessageElemHandler = {
             });
             return summary || "用户转发了一条聊天记录，但插件未收到详细内容";
           }
-          default:
+          default: {
+            // Yuanbao may send slash commands (e.g. /acp) as custom elements.
+            if (typeof customContent?.text === "string") {
+              log.info("unknown custom element with text", {
+                elemType: customContent?.elem_type,
+                text: customContent.text,
+              });
+              if (customContent.text.trim().startsWith("/")) {
+                return customContent.text;
+              }
+            }
+            log.info("unknown custom element", { customContent });
             return FALLBACK_TEXT;
+          }
         }
       } catch {
         // JSON parse failed, fall back to placeholder

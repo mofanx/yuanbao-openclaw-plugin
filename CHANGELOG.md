@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### 修复
+- **fix:** `guard-command` 现在会剥离消息开头的 `@机器人` 前缀，确保群聊中 `@机器人 /acp spawn ...` 能正确识别为控制命令。
+- **fix:** `customHandler` 对未知 `TIMCustomElem` 子类型增加兜底：如果 payload 中的 `text` 字段以 `/` 开头，则按 slash 命令处理，避免元宝命令菜单下发的 `/acp` 被识别为 `[当前消息暂不支持查看]`。
+- **fix:** `build-context` 在发送者等于 `botOwnerId` 时，向消息上下文注入 `OwnerAllowFrom`，让 OpenClaw core 的 `isAuthorizedSender` 正确授权 `/acp` 等 owner 命令。
+
 ### Devin CLI 集成增强
 - **feat:** 添加 `/model` 自定义命令，用于在元宝聊天中切换 Devin ACP 模型
 - **feat:** 添加 `/models` 自定义命令，列出当前可用的 Devin ACP 模型

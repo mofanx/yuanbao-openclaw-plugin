@@ -206,6 +206,82 @@ void test("guard-command: group extracts TIMTextElem-only text (skips @mention c
   assert.deepEqual(ctx.commandParts, ["/new"]);
 });
 
+void test("guard-command: text starts with @bot mention + slash command -> recognizes command", async (t) => {
+  setupMocks(t, { gateResult: { commandAuthorized: true, shouldBlock: false } });
+  const { guardCommand } = await import("./guard-command.js");
+
+  let detectedText = "";
+  const ctx = createMockCtx({
+    isGroup: false,
+    rawBody: "@元宝 /acp spawn devin --mode persistent --bind here",
+    mentions: [{ userId: "bot-001", text: "@元宝" }],
+    core: {
+      channel: {
+        commands: { shouldHandleTextCommands: () => true },
+        text: {
+          hasControlCommand: (text: string) => {
+            detectedText = text;
+            return true;
+          },
+        },
+      },
+    } as any,
+    account: {
+      botId: "bot-001",
+      accountId: "bot-001",
+      config: { dm: { policy: "open", allowFrom: [] } },
+    } as any,
+  });
+  const { next, wasCalled } = createMockNext();
+
+  await guardCommand.handler(ctx, next);
+
+  assert.equal(detectedText, "/acp spawn devin --mode persistent --bind here");
+  assert.equal(wasCalled(), true);
+  assert.deepEqual(ctx.commandParts, ["/acp", "spawn", "devin", "--mode", "persistent", "--bind", "here"]);
+});
+
+void test("guard-command: group with custom @mention elem + /acp text -> recognizes command", async (t) => {
+  setupMocks(t, { gateResult: { commandAuthorized: true, shouldBlock: false } });
+  const { guardCommand } = await import("./guard-command.js");
+
+  let detectedText = "";
+  const ctx = createMockCtx({
+    isGroup: true,
+    isAtBot: true,
+    rawBody: "@元宝 /acp spawn devin",
+    raw: {
+      msg_body: [
+        { msg_type: "TIMCustomElem", msg_content: { data: JSON.stringify({ elem_type: 1002, text: "@元宝", user_id: "bot-001" }) } },
+        { msg_type: "TIMTextElem", msg_content: { text: "/acp spawn devin" } },
+      ],
+    } as any,
+    core: {
+      channel: {
+        commands: { shouldHandleTextCommands: () => true },
+        text: {
+          hasControlCommand: (text: string) => {
+            detectedText = text;
+            return true;
+          },
+        },
+      },
+    } as any,
+    account: {
+      botId: "bot-001",
+      accountId: "bot-001",
+      config: { dm: { policy: "open", allowFrom: [] } },
+    } as any,
+  });
+  const { next, wasCalled } = createMockNext();
+
+  await guardCommand.handler(ctx, next);
+
+  assert.equal(detectedText, "/acp spawn devin");
+  assert.equal(wasCalled(), true);
+  assert.deepEqual(ctx.commandParts, ["/acp", "spawn", "devin"]);
+});
+
 void test("guard-command: DM policy closed + not in allowFrom -> shouldBlock", async (t) => {
   setupMocks(t, {
     gateCallback: (opts: any) => {

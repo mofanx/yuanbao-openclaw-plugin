@@ -16,14 +16,38 @@ function extractTextOnly(ctx: PipelineContext): string {
     .trim() || ctx.rawBody;
 }
 
+/** Remove a leading @mention token so slash commands like `/acp spawn` still match
+ *  when Yuanbao sends the message as `@机器人 /acp spawn` or as a custom @mention
+ *  element followed by a text element.
+ */
+function stripLeadingMention(text: string, ctx: PipelineContext): string {
+  const trimmed = text.trim();
+  // Try to remove the specific @bot mention text, if we know it.
+  const botMention = ctx.mentions?.find(
+    m => m.userId === ctx.account?.botId || (m.text && m.text.replace(/^@/, "") === ctx.account?.botId),
+  );
+  if (botMention?.text) {
+    const mention = botMention.text.replace(/^@/, "");
+    const escaped = mention.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(`^@?${escaped}\\s*`, "i");
+    const after = trimmed.replace(re, "").trim();
+    if (after !== trimmed) return after;
+  }
+  // Fallback: strip any leading @... token (this is safe for command detection
+  // because non-slash text will still not match a control command).
+  const afterFallback = trimmed.replace(/^@[^\s]+\s*/, "").trim();
+  if (afterFallback.startsWith("/")) return afterFallback;
+  return trimmed;
+}
+
 export const guardCommand: MiddlewareDescriptor = {
   name: "guard-command",
   handler: async (ctx, next) => {
-    const { core, config, rawBody, fromAccount, account } = ctx;
+    const { core, config, fromAccount, account } = ctx;
 
-    // Group chat: extract TIMTextElem-only text for command detection
+    // Extract TIMTextElem-only text for command detection
     // (rawBody includes @mention custom elements which break command matching).
-    const commandText = ctx.isGroup ? extractTextOnly(ctx) : rawBody;
+    const commandText = stripLeadingMention(extractTextOnly(ctx), ctx);
 
     const allowTextCommands = core.channel.commands.shouldHandleTextCommands({
       cfg: config,

@@ -649,6 +649,7 @@ cat /proc/<PID>/environ | tr '\0' '\n' | grep DEVIN_MODEL
 
 | 现象 | 排查 |
 |------|------|
+| 元宝里发送 `/acp spawn ...` 没反应，随后普通消息报错 `ProviderAuthError: No API key found for provider "openai"` | `/acp` 命令未被正确分发，消息仍进入 `main` session 的 OpenAI Codex 链路。常见原因：<br>1. 消息以 `@机器人 /acp ...` 下发时 `guard-command` 未识别；<br>2. `/acp` 以 `TIMCustomElem` 自定义消息下发时未被识别为 slash 命令；<br>3. 命令虽被识别但 core 的 `isAuthorizedSender` 未将元宝 bot owner 标记为已授权，导致 `handleAcpCommand` 被静默丢弃。<br>确保已升级到修复了上述问题的插件版本，并在 `buildContext` 中注入 `OwnerAllowFrom`。 |
 | `Permission denied: an internal error occurred (trace ID: ...)` | 认证失败。检查 `credentials.toml` 是否存在（`devin auth status`）；若无，运行 `devin auth login --force-manual-token-flow`；或设置 `DEVIN_ACP_API_KEY` 环境变量。 |
 | `ACP: Starting browser-based PKCE authentication flow`（日志中） | 桥接器未被使用，还在直接用 `devin acp`。检查 acpx 配置中 `agents.devin.command` 是否为 `"node"` 且 `args` 指向桥接脚本。 |
 | `Authentication failed: Team settings refresh timed out after 3000ms` | 网络到 Devin 服务器延迟过高。桥接器会自动重试（最多 7 次）；若仍失败，检查网络连接或增大 `DEVIN_ACP_AUTH_RETRIES`。 |

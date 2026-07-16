@@ -98,6 +98,7 @@ export const buildContext: MiddlewareDescriptor = {
       ...(isGroup && raw.group_name ? { GroupSubject: raw.group_name } : {}),
       SenderName: senderNickname || fromAccount,
       SenderId: fromAccount,
+      ...(fromAccount === (account.botOwnerId || raw.bot_owner_id) && { OwnerAllowFrom: [fromAccount] }),
       Provider: "yuanbao",
       Surface: "yuanbao",
       MessageSid: raw.msg_id ?? String(raw.msg_seq ?? ""),
