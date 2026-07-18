@@ -33,7 +33,8 @@
       maxChunkChars: 1200,
     },
     runtime: {
-      ttlMinutes: 120,
+      // 约一年，避免 ACP runtime 因 120 分钟空闲回收导致 Devin session 元数据丢失
+      ttlMinutes: 525600,
     },
   },
 

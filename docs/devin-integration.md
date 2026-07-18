@@ -166,7 +166,8 @@ openclaw config set plugins.entries.acpx.config.timeoutSeconds 600
     defaultAgent: "devin",
     allowedAgents: ["devin"],
     maxConcurrentSessions: 4,
-    runtime: { ttlMinutes: 120 },
+    // 约一年，避免 ACP runtime 因 120 分钟空闲回收导致 Devin session 元数据丢失
+    runtime: { ttlMinutes: 525600 },
   },
 
   plugins: {
@@ -239,11 +240,11 @@ openclaw config set acp.stream.coalesceIdleMs 300
 # 可用模型：swe-1-6 / swe-1-7（免费）、swe-1-6-fast / swe-1-7-lightning（低成本）、adaptive / deepseek-v4 / glm-5-2 / gpt-5-6-luna-medium
 if [ -f ~/.config/systemd/user/openclaw-gateway.service ]; then
   # 如果使用 systemd 服务，添加环境变量到服务文件作为默认模型
-  sed -i '/Environment=DEVIN_ACP_BRIDGE_DEBUG=1/a Environment=DEVIN_MODEL=swe-1-6' ~/.config/systemd/user/openclaw-gateway.service
+  sed -i '/Environment=DEVIN_ACP_BRIDGE_DEBUG=1/a Environment=DEVIN_MODEL=swe-1-7' ~/.config/systemd/user/openclaw-gateway.service
   systemctl --user daemon-reload
 else
   # 如果不使用 systemd，需要手动设置环境变量
-  echo "export DEVIN_MODEL=swe-1-6" >> ~/.bashrc
+  echo "export DEVIN_MODEL=swe-1-7" >> ~/.bashrc
   source ~/.bashrc
 fi
 
@@ -448,7 +449,7 @@ Devin CLI 2026.5.26-0 及更高版本引入了多项重要的 ACP 相关改进�
 | `WINDSURF_API_KEY`        | 同上，备用变量名                                 | —            |
 | `DEVIN_BIN`               | devin 可执行文件路径                             | `"devin"`    |
 | `DEVIN_CREDENTIALS_PATH`  | credentials.toml 路径                           | XDG 标准路径 |
-| `DEVIN_MODEL`             | 默认 Devin ACP 模型（如 `swe-1-6`）              | —            |
+| `DEVIN_MODEL`             | 默认 Devin ACP 模型（如 `swe-1-7`）              | —            |
 | `DEVIN_ACP_AUTH_RETRIES`  | 认证超时重试次数                                 | `6`          |
 | `DEVIN_ACP_AUTH_RETRY_MS` | 每次重试间隔（毫秒）                             | `1500`       |
 | `DEVIN_ACP_BRIDGE_DEBUG`  | 设为 `1` 开启详细日志                            | —            |
@@ -601,7 +602,7 @@ openclaw config set channels.yuanbao.outboundQueueStrategy "immediate"
 
 **原因**:
 - `devin acp` 命令默认不读取 `~/.config/devin/config.json` 中的模型配置
-- ACP 模式使用账户的默认模型（可能是付费模型），而不是配置文件中的 `swe-1-6`
+- ACP 模式使用账户的默认模型（可能是付费模型），而不是配置文件中的 `swe-1-7`
 
 **解决方案**:
 
@@ -617,12 +618,12 @@ openclaw config set channels.yuanbao.outboundQueueStrategy "immediate"
 
 ```bash
 # 如果使用 systemd 服务，添加环境变量到服务文件
-sed -i '/Environment=DEVIN_ACP_BRIDGE_DEBUG=1/a Environment=DEVIN_MODEL=swe-1-6' ~/.config/systemd/user/openclaw-gateway.service
+sed -i '/Environment=DEVIN_ACP_BRIDGE_DEBUG=1/a Environment=DEVIN_MODEL=swe-1-7' ~/.config/systemd/user/openclaw-gateway.service
 systemctl --user daemon-reload
 systemctl --user restart openclaw-gateway.service
 
 # 如果不使用 systemd，手动设置环境变量
-export DEVIN_MODEL=swe-1-6
+export DEVIN_MODEL=swe-1-7
 ```
 
 **可用模型**（通过 Devin CLI `/model` 命令验证）：
@@ -658,6 +659,8 @@ cat /proc/<PID>/environ | tr '\0' '\n' | grep DEVIN_MODEL
 | `Harness command not found` | `which node` 确认 node 在 PATH；`node scripts/devin-acp-auth-bridge.mjs` 单跑验证脚本可执行。 |
 | 元宝里收不到流式增量 | 检查 `acp.stream.coalesceIdleMs`（建议 300）与 `channels.yuanbao.idleMs`（建议 5000），前者应小于后者。 |
 | Devin 子进程串话 | 给每个 peer 配独立 `agents.list[]` + `bindings[]`，确保 `workspace` 与 `cwd` 不重叠。 |
+| `ACP error (ACP_SESSION_INIT_FAILED): ACP metadata is missing for agent:devin:acp:...` | 不是上下文超限。原因是 `acp.runtime.ttlMinutes` 默认 120 分钟，ACP runtime 空闲 120 分钟后被回收；再次发消息时 Devin 服务端 session 无法 resume，系统把会话标为 stale 并解绑，随后 `task-registry.maintenance` 清理 `acp` 元数据。解决：把 `~/.openclaw/openclaw.json` 里的 `acp.runtime.ttlMinutes` 改成一个很大的正整数（例如 `525600`，约一年），**不能填 `0`**（OpenClaw 校验要求 `>0`），然后重启 `openclaw-gateway.service`。 |
+| 改完 `ttlMinutes` 重启后元宝提示“服务器开小差了” | 说明配置校验失败。检查 `systemctl --user status openclaw-gateway.service` 和 `/tmp/openclaw/openclaw-*.log`，常见错误是 `acp.runtime.ttlMinutes: Too small: expected number to be >0`。改为 `>0` 的整数后再重启。 |
 
 ---
 

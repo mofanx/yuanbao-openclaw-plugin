@@ -41,7 +41,7 @@
 //   DEVIN_ACP_BRIDGE_DEBUG=1   打印调试日志到 stderr
 //   DEVIN_ACP_AUTH_RETRIES     认证失败（如 team settings 3s 超时）时的重试次数（默认 6）
 //   DEVIN_ACP_AUTH_RETRY_MS    每次重试之间的退避毫秒（默认 1500）
-//   DEVIN_MODEL         指定 Devin 使用的模型（如 "swe-1-6"）
+//   DEVIN_MODEL         指定 Devin 使用的模型（如 "swe-1-7"）
 // =============================================================================
 
 import { spawn } from "node:child_process";

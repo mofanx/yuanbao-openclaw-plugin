@@ -91,8 +91,9 @@ ACP (Agent Control Protocol) 是 OpenClaw 的核心功能之一，允许通过�
     defaultAgent: "devin",
     allowedAgents: ["devin"],
     maxConcurrentSessions: 4,
+    // 约一年，避免 ACP runtime 因 120 分钟空闲回收导致 Devin session 元数据丢失
     runtime: {
-      ttlMinutes: 120
+      ttlMinutes: 525600
     }
   }
 }
@@ -107,7 +108,7 @@ ACP (Agent Control Protocol) 是 OpenClaw 的核心功能之一，允许通过�
 | `backend` | ACP 后端类型 | 是 |
 | `defaultAgent` | 默认代理 | 是 |
 | `allowedAgents` | 允许的代理列表 | 是 |
-| `maxConcurrentSessions` | 最大并发会话数 | 否 |
+| `maxConcurrentSessions`ACP runtime 空闲回收大并发会话数，建议设很大（如 525600）以避免会话元数据被清理；必须 >0 | 否 |
 | `runtime.ttlMinutes` | 会话生存时间（分钟） | 否 |
 
 ### 3.2 acpx 插件概述
@@ -689,11 +690,11 @@ openclaw config set plugins.entries.acpx.config.permissionMode "approve-all"
 
 **解决：**
 ```bash
-# 增加 TTL
-openclaw config set acp.runtime.ttlMinutes 240
+# 增加 TTL（必须 >0，不能填 0；建议设一年：525600）
+openclaw config set acp.runtime.ttlMinutes 525600
 
 # 调整超时设置
-openclaw config set plugins.entries.acpx.config.timeoutSeconds 300
+openclaw config set plugins.entries.acpx.config.timeoutSeconds 600
 ```
 
 ### 6.2 调试技巧

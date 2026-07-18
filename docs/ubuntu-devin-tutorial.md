@@ -255,7 +255,7 @@ openclaw config set acp.backend "acpx"
 openclaw config set acp.defaultAgent "devin"
 openclaw config set acp.allowedAgents '["devin"]'
 openclaw config set acp.maxConcurrentSessions 4
-openclaw config set acp.runtime.ttlMinutes 120
+openclaw config set acp.runtime.ttlMinutes 525600  # 约一年，避免 ACP runtime 空闲回收导致 Devin session 元数据丢失
 
 # 配置 acpx 插件（关键：command 指向桥接器，不要直接用 "devin"）
 openclaw config set plugins.entries.acpx.config.permissionMode "approve-all"
@@ -298,7 +298,7 @@ openclaw config set acp.stream.coalesceIdleMs 300
 # devin acp 命令默认不读取 ~/.config/devin/config.json 中的模型配置
 # 可通过环境变量 DEVIN_MODEL 设置默认模型，或在聊天中发送 /model swe-1-7
 # 可用模型：swe-1-6 / swe-1-7（免费）、swe-1-6-fast / swe-1-7-lightning（低成本）、adaptive / deepseek-v4 / glm-5-2 / gpt-5-6-luna-medium
-sed -i '/Environment=DEVIN_ACP_BRIDGE_DEBUG=1/a Environment=DEVIN_MODEL=swe-1-6' ~/.config/systemd/user/openclaw-gateway.service
+sed -i '/Environment=DEVIN_ACP_BRIDGE_DEBUG=1/a Environment=DEVIN_MODEL=swe-1-7' ~/.config/systemd/user/openclaw-gateway.service
 systemctl --user daemon-reload
 ```
 
@@ -508,7 +508,7 @@ source ~/.bashrc
 
 **原因**：
 - `devin acp` 命令默认不读取 `~/.config/devin/config.json` 中的模型配置
-- ACP 模式使用账户的默认模型（可能是付费模型），而不是 `swe-1-6` 等免费模型
+- ACP 模式使用账户的默认模型（可能是付费模型），而不是 `swe-1-7` 等已显式指定的免费模型
 
 **解决**（推荐方式）：
 
@@ -532,7 +532,7 @@ source ~/.bashrc
 
 ```bash
 # 添加环境变量到 systemd 服务文件
-sed -i '/Environment=DEVIN_ACP_BRIDGE_DEBUG=1/a Environment=DEVIN_MODEL=swe-1-6' ~/.config/systemd/user/openclaw-gateway.service
+sed -i '/Environment=DEVIN_ACP_BRIDGE_DEBUG=1/a Environment=DEVIN_MODEL=swe-1-7' ~/.config/systemd/user/openclaw-gateway.service
 systemctl --user daemon-reload
 systemctl --user restart openclaw-gateway.service
 ```

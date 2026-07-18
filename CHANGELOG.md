@@ -6,6 +6,7 @@
 - **fix:** `guard-command` 现在会剥离消息开头的 `@机器人` 前缀，确保群聊中 `@机器人 /acp spawn ...` 能正确识别为控制命令。
 - **fix:** `customHandler` 对未知 `TIMCustomElem` 子类型增加兜底：如果 payload 中的 `text` 字段以 `/` 开头，则按 slash 命令处理，避免元宝命令菜单下发的 `/acp` 被识别为 `[当前消息暂不支持查看]`。
 - **fix:** `build-context` 在发送者等于 `botOwnerId` 时，向消息上下文注入 `OwnerAllowFrom`，让 OpenClaw core 的 `isAuthorizedSender` 正确授权 `/acp` 等 owner 命令。
+- **docs:** 在 `docs/devin-integration.md` 新增 `ACP_SESSION_INIT_FAILED: ACP metadata is missing` 故障排查：由 `acp.runtime.ttlMinutes` 默认 120 分钟导致 ACP runtime 空闲回收、Devin session 无法 resume 并触发元数据清理。
 
 ### Devin CLI 集成增强
 - **feat:** 添加 `/model` 自定义命令，用于在元宝聊天中切换 Devin ACP 模型
@@ -16,6 +17,7 @@
 - **feat:** 中会话模型切换，切换模型后无需创建新会话，历史记录不丢失
 - **docs:** 更新 `docs/devin-integration.md`，补充 `/model`、`/models` 命令、模型校验和插件更新说明
 - **docs:** 更新 `docs/ubuntu-devin-tutorial.md`，补充模型切换校验说明
+- **docs:** 同步文档与示例中 Devin 默认模型和 ACP runtime TTL 配置：默认模型示例统一为 `swe-1-7`，`acp.runtime.ttlMinutes` 示例统一为 `525600`（约一年），并说明不能填 `0`
 
 ## 2.17.0 (2026-07-02) - feat/devin-bridge
 
