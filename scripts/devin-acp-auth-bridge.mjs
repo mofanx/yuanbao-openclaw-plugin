@@ -45,7 +45,7 @@
 // =============================================================================
 
 import { spawn } from "node:child_process";
-import { readFileSync, existsSync, watch, mkdirSync } from "node:fs";
+import { readFileSync, existsSync, watch, mkdirSync, createWriteStream, renameSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 
@@ -76,18 +76,42 @@ function resolveModel() {
   return model;
 }
 
+const LOG_DIR = path.join(homedir(), ".openclaw", "acpx");
+mkdirSync(LOG_DIR, { recursive: true });
+const STDERR_LOG_FILE = path.join(LOG_DIR, "devin-acp-bridge-stderr.log");
+const STDERR_LOG_PREV_FILE = path.join(LOG_DIR, "devin-acp-bridge-stderr-prev.log");
+if (existsSync(STDERR_LOG_FILE)) {
+  try {
+    renameSync(STDERR_LOG_FILE, STDERR_LOG_PREV_FILE);
+  } catch (err) {
+    process.stderr.write(`[devin-acp-bridge] WARN failed to rotate stderr log: ${err?.message || err}\n`);
+  }
+}
+const stderrLog = createWriteStream(STDERR_LOG_FILE, { flags: "a" });
+stderrLog.on("error", (err) => {
+  process.stderr.write(`[devin-acp-bridge] WARN stderr log stream error: ${err?.message || err}\n`);
+});
+function writeToStderrLog(prefix, ...args) {
+  const line = `${new Date().toISOString()} ${prefix} ${args.join(" ")}\n`;
+  if (stderrLog) stderrLog.write(line);
+}
+function logDebug(...args) {
+  if (!DEBUG) return;
+  const line = `[devin-acp-bridge] ${args.join(" ")}\n`;
+  process.stderr.write(line);
+  writeToStderrLog("[DEBUG]", ...args);
+}
+function logWarn(...args) {
+  const line = `[devin-acp-bridge] WARN ${args.join(" ")}\n`;
+  process.stderr.write(line);
+  writeToStderrLog("[WARN]", ...args);
+}
+
 let DEVIN_MODEL = resolveModel();
 // 桥接器为自己发起的 authenticate 预留一个不会与 acpx 数字 id 冲突的字符串 id
 const BRIDGE_AUTH_ID = "__devin_acp_bridge_authenticate__";
 // 桥接器为自己发起的 set_config_option 预留一个不会与 acpx 数字 id 冲突的字符串 id
 const SET_MODEL_ID = "__devin_acp_bridge_set_model__";
-
-function logDebug(...args) {
-  if (DEBUG) process.stderr.write(`[devin-acp-bridge] ${args.join(" ")}\n`);
-}
-function logWarn(...args) {
-  process.stderr.write(`[devin-acp-bridge] WARN ${args.join(" ")}\n`);
-}
 
 function resolveCredentialsPath() {
   if (process.env.DEVIN_CREDENTIALS_PATH) return process.env.DEVIN_CREDENTIALS_PATH;
@@ -136,7 +160,10 @@ if (!API_KEY) {
 }
 
 // 直接传递所有环境变量，确保 WINDSURF_API_KEY 能被 devin acp 子进程继承
-const child = spawn(DEVIN_BIN, ["acp"], { stdio: ["pipe", "pipe", "inherit"], env: process.env });
+const child = spawn(DEVIN_BIN, ["acp"], { stdio: ["pipe", "pipe", "pipe"], env: process.env });
+child.stderr.on("data", (chunk) => {
+  stderrLog.write(chunk);
+});
 child.on("error", (err) => {
   logWarn(`failed to spawn '${DEVIN_BIN} acp': ${err?.message || err}`);
   process.exit(1);

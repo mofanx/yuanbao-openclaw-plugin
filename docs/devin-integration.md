@@ -661,6 +661,7 @@ cat /proc/<PID>/environ | tr '\0' '\n' | grep DEVIN_MODEL
 | Devin 子进程串话 | 给每个 peer 配独立 `agents.list[]` + `bindings[]`，确保 `workspace` 与 `cwd` 不重叠。 |
 | `ACP error (ACP_SESSION_INIT_FAILED): ACP metadata is missing for agent:devin:acp:...` | 不是上下文超限。原因是 `acp.runtime.ttlMinutes` 默认 120 分钟，ACP runtime 空闲 120 分钟后被回收；再次发消息时 Devin 服务端 session 无法 resume，系统把会话标为 stale 并解绑，随后 `task-registry.maintenance` 清理 `acp` 元数据。解决：把 `~/.openclaw/openclaw.json` 里的 `acp.runtime.ttlMinutes` 改成一个很大的正整数（例如 `525600`，约一年），**不能填 `0`**（OpenClaw 校验要求 `>0`），然后重启 `openclaw-gateway.service`。 |
 | 改完 `ttlMinutes` 重启后元宝提示“服务器开小差了” | 说明配置校验失败。检查 `systemctl --user status openclaw-gateway.service` 和 `/tmp/openclaw/openclaw-*.log`，常见错误是 `acp.runtime.ttlMinutes: Too small: expected number to be >0`。改为 `>0` 的整数后再重启。 |
+| `ACP_TURN_FAILED: agent disconnected during request (connection_close, exit=null, signal=null)`，随后连续 `ACP_SESSION_INIT_FAILED: ACP metadata is missing for agent:devin:acp:...` | `devin acp` 子进程被系统 OOM 杀死或异常退出。诱因通常是：会话运行多天、message nodes 累积过多（如 500+）、系统内存/ swap 紧张。先 `free -h` 和 `ps aux --sort=-%mem` 看内存；缓解：释放/腾出内存后，在 Yuanbao 里 `/acp close` 旧会话，然后 `/acp spawn devin --mode persistent --bind here`；若内存长期不足可改用 `--mode oneshot`（每次消息独立 spawn，内存不持续累积）。排查日志：`~/.openclaw/acpx/devin-acp-bridge-stderr.log`（桥接器捕获的 devin stderr）和 `~/.local/share/devin/cli/logs/devin_*.log`（devin CLI 自身日志）的尾部。 |
 
 ---
 

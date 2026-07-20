@@ -18,6 +18,8 @@
 - **docs:** 更新 `docs/devin-integration.md`，补充 `/model`、`/models` 命令、模型校验和插件更新说明
 - **docs:** 更新 `docs/ubuntu-devin-tutorial.md`，补充模型切换校验说明
 - **docs:** 同步文档与示例中 Devin 默认模型和 ACP runtime TTL 配置：默认模型示例统一为 `swe-1-7`，`acp.runtime.ttlMinutes` 示例统一为 `525600`（约一年），并说明不能填 `0`
+- **fix:** `devin-acp-auth-bridge.mjs` 将 `devin acp` 子进程的 stderr 持久化到 `~/.openclaw/acpx/devin-acp-bridge-stderr.log`，方便排查进程崩溃/OOM；修复桥接器初始化时 `stderrLog` 未初始化的小 bug
+- **docs:** 在 `docs/devin-integration.md` 新增 `ACP_TURN_FAILED(connection_close, exit=null, signal=null)` 后续 `ACP_SESSION_INIT_FAILED` 的故障排查：由 `devin acp` 进程被 OOM/异常退出导致，并给出内存检查、会话重置和日志排查步骤
 
 ## 2.17.0 (2026-07-02) - feat/devin-bridge
 
