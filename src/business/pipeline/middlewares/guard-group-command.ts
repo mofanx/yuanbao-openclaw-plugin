@@ -15,6 +15,8 @@ import type { MiddlewareDescriptor } from "../types.js";
 const GROUP_ALLOWED_COMMANDS = new Set<string>([
   "/new", "/reset", "/retry", "/undo", "/stop",
   "/approve", "/btw", "/queue",
+  "/acp",
+  "/model", "/models", "/m",
 ]);
 
 export const guardGroupCommand: MiddlewareDescriptor = {
