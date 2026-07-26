@@ -40,7 +40,7 @@ export const guardGroupCommand: MiddlewareDescriptor = {
       await sendGroupMsgBody({
         account,
         groupCode: groupCode!,
-        msgBody: buildOutboundMsgBody(prepareOutboundContent(
+        msgBody: buildOutboundMsgBody(await prepareOutboundContent(
           rejectReason,
           groupCode,
           getMember(account.accountId),
